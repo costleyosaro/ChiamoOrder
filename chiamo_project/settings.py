@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     # Your apps
     'customers',
     'products',
-    'qr_codes',
     'orders',
 ]
 

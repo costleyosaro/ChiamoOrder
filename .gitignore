@@ -4,19 +4,33 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Virtual Environment
 venv/
 cvenv/
 ENV/
+env/
 
 # Django
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+
+# Media and Images
 media/
 qr_codes/
 staticfiles/
-logs/
+*.png
+*.PNG
+*.jpg
+*.JPG
+*.jpeg
+*.JPEG
+*.webp
+*.gif
+*.bmp
+*.ico
 
 # Environment
 .env
@@ -32,55 +46,3 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
-
-media/
-staticfiles/
-*.sqlite3
-.env
-cvenv/
-qr_codes/
-
-# Large image assets
-media/
-qr_codes/assets/images/
-*.png
-*.jpg
-*.jpeg
-*.webp
-
-@"
-# Virtual Environment
-cvenv/
-venv/
-env/
-
-# ALL Images
-*.png
-*.PNG
-*.jpg
-*.JPG
-*.jpeg
-*.JPEG
-*.gif
-*.bmp
-*.ico
-
-# Folders with images/media
-qr_codes/
-media/
-assets/
-static/images/
-uploads/
-
-# Python
-__pycache__/
-*.py[cod]
-*.sqlite3
-*.db
-db.sqlite3
-.env
-
-# IDE
-.vscode/
-.idea/
-"@ | Set-Content -Path .gitignore -Encoding UTF8
