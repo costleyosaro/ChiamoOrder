@@ -1,0 +1,1 @@
+web: gunicorn chiamo_project.wsgi --log-file -

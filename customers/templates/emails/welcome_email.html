@@ -1,0 +1,94 @@
+{% load static%}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome to ChiamoOrder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .logo-section {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-section img {
+      max-width: 80px;
+      vertical-align: middle;
+    }
+    .logo-text {
+      display: inline-block;
+      margin-left: 10px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #1b4b8c;
+    }
+    .logo-text span {
+      color: #f1c40f; /* dark yellow accent */
+    }
+    .content {
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .cta-btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 24px;
+      background-color: #f1c40f;
+      color: #000;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 13px;
+      color: #777;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <!-- Logo + Animation -->
+    <div class="logo-section">
+      <img src="{{ domain }}/static/images/logo-animation.gif" alt="ChiamoOrder Animation" />
+      <div class="logo-text">Chiamo<span>Order</span></div>
+    </div>
+
+    <!-- Message Content -->
+    <div class="content">
+      <h2>Welcome to ChiamoOrder 🎉</h2>
+      <p>
+        Hi {{ user.business_name }},<br><br>
+        We’re excited to have you join <strong>ChiamoOrder</strong> — your one-stop solution for smarter and faster order management.
+      </p>
+      <p>
+        Get started by exploring your dashboard, adding products, and experiencing seamless order processing.
+      </p>
+
+      <!-- Call to Action -->
+      <a href="{{ domain }}/login" class="cta-btn">Go to Dashboard</a>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      © {{ year }} ChiamoOrder. All rights reserved.<br>
+      Need help? <a href="mailto:support@chiamoorder.com">Contact Support</a>
+    </div>
+  </div>
+</body>
+</html>

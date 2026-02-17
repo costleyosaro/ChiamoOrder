@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+cvenv/
+ENV/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+qr_codes/
+staticfiles/
+logs/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+media/
+staticfiles/
+*.sqlite3
+.env
+cvenv/
+qr_codes/
+
+# Large image assets
+media/
+qr_codes/assets/images/
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+@"
+# Virtual Environment
+cvenv/
+venv/
+env/
+
+# ALL Images
+*.png
+*.PNG
+*.jpg
+*.JPG
+*.jpeg
+*.JPEG
+*.gif
+*.bmp
+*.ico
+
+# Folders with images/media
+qr_codes/
+media/
+assets/
+static/images/
+uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+db.sqlite3
+.env
+
+# IDE
+.vscode/
+.idea/
+"@ | Set-Content -Path .gitignore -Encoding UTF8
