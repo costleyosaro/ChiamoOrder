@@ -1,1 +1,1 @@
-web: gunicorn chiamo_project.wsgi --log-file -
+web: python manage.py migrate && gunicorn chiamo_project.wsgi --log-file -
