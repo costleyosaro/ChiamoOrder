@@ -12,7 +12,7 @@ class Command(BaseCommand):
         email = 'costleyosaro4@gmail.com'
         password = 'Osayi@12!'
         
-        if not User.objects.filter(username=username).exists():
+        if not User.objects.filter(business_name=business_name).exists():
             User.objects.create_superuser(
                 business_name=business_name,
                 email=email,
