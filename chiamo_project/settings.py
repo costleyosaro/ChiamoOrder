@@ -192,6 +192,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://chiamoorder.com",
 ]
 
+
 # Add frontend URL if provided
 if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
