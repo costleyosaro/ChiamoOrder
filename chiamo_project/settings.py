@@ -188,6 +188,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "https://chiamo-frontend-xfj2.vercel.app",
+    "https://chiamoorder.com",
 ]
 
 # Add frontend URL if provided
