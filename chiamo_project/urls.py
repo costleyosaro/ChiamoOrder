@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/customers/", include("customers.urls")),
     path("api/products/", include("products.urls")),
     path("api/orders/", include("orders.urls")),
+    
 
     # ✅ JWT authentication endpoints
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
