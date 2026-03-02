@@ -183,18 +183,20 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://chiamo-frontend.vercel.app')
 BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
 SITE_URL = FRONTEND_URL
 
-# ✅ ============ CORS SETTINGS (FIXED) ============
+# ✅ ============ CORS SETTINGS (FIXED - NO TRAILING SLASHES) ============
 CORS_ALLOWED_ORIGINS = [
-    "https://chiamo-frontend.vercel.app",  # ✅ Your actual frontend
+    "https://chiamo-frontend.vercel.app",  # ✅ NO trailing slash
     "http://localhost:3000",
     "http://localhost:5173", 
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
 
-# ✅ Add environment frontend URL if different
+# ✅ Add environment frontend URL if different (ensure no trailing slash)
 if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
-    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+    # Remove trailing slash if present
+    clean_frontend_url = FRONTEND_URL.rstrip('/')
+    CORS_ALLOWED_ORIGINS.append(clean_frontend_url)
 
 # ✅ CORS Configuration
 CORS_ALLOW_CREDENTIALS = True
@@ -209,27 +211,28 @@ CORS_ALLOW_HEADERS = [
     'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
 ]
 
-# ✅ ============ CSRF SETTINGS (FIXED) ============
+# ✅ ============ CSRF SETTINGS (FIXED - NO TRAILING SLASHES) ============
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://chiamo-frontend.vercel.app",  # ✅ Your actual frontend
-    "https://web-production-04707.up.railway.app",  # ✅ Your backend
+    "https://chiamo-frontend.vercel.app",  # ✅ NO trailing slash
+    "https://web-production-04707.up.railway.app",  # ✅ NO trailing slash
     "http://localhost:3000",
     "http://localhost:5173",
 ]
 
-# ✅ Add Railway domain to trusted origins
+# ✅ Add Railway domain to trusted origins (ensure no trailing slash)
 if RAILWAY_DOMAIN:
-    CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_DOMAIN}')
+    clean_railway_url = f'https://{RAILWAY_DOMAIN}'.rstrip('/')
+    CSRF_TRUSTED_ORIGINS.append(clean_railway_url)
 
-if FRONTEND_URL and FRONTEND_URL not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
+if FRONTEND_URL and FRONTEND_URL.rstrip('/') not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL.rstrip('/'))
 
-if BACKEND_URL and BACKEND_URL not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(BACKEND_URL)
+if BACKEND_URL and BACKEND_URL.rstrip('/') not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(BACKEND_URL.rstrip('/'))
 
 # ✅ ============ EMAIL CONFIGURATION ============
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <noreply@chiamoorder.com>')
