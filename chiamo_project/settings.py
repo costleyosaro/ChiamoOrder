@@ -1,4 +1,3 @@
-
 import os
 import os
 from pathlib import Path
@@ -86,29 +85,6 @@ TEMPLATES = [
     },
 ]
 
-
-# ✅ Production URL Configuration
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://your-app-name.vercel.app')
-BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
-
-# ✅ Site URL should point to frontend (where users interact)
-SITE_URL = FRONTEND_URL
-
-# ✅ Email configuration
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <noreply@chiamoorder.com>')
-
-# ✅ CORS settings
-CORS_ALLOWED_ORIGINS = [
-    FRONTEND_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-# ✅ CSRF settings
-CSRF_TRUSTED_ORIGINS = [
-    FRONTEND_URL,
-    BACKEND_URL,
-]
 # ============ WSGI ============
 WSGI_APPLICATION = 'chiamo_project.wsgi.application'
 
@@ -202,29 +178,27 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# ============ CORS SETTINGS ============
-# Get frontend URL from environment
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+# ✅ ============ PRODUCTION URL CONFIGURATION ============
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://chiamo-frontend.vercel.app')
+BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
+SITE_URL = FRONTEND_URL
 
+# ✅ ============ CORS SETTINGS (FIXED) ============
 CORS_ALLOWED_ORIGINS = [
+    "https://chiamo-frontend.vercel.app",  # ✅ Your actual frontend
     "http://localhost:3000",
-    "http://localhost:5173",
+    "http://localhost:5173", 
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    "https://chiamo-frontend-xfj2.vercel.app",
-    "https://chiamoorder.com",
 ]
 
-
-# Add frontend URL if provided
+# ✅ Add environment frontend URL if different
 if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
 
-# For production, allow Railway domains
-if os.getenv('RAILWAY_ENVIRONMENT'):
-    CORS_ALLOW_ALL_ORIGINS = True  # Or configure specific domains
-
+# ✅ CORS Configuration
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False  # ✅ Set to False for security
 
 CORS_ALLOW_METHODS = [
     'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT',
@@ -235,22 +209,30 @@ CORS_ALLOW_HEADERS = [
     'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
 ]
 
-# ============ CSRF SETTINGS ============
+# ✅ ============ CSRF SETTINGS (FIXED) ============
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://chiamo-frontend.vercel.app",  # ✅ Your actual frontend
+    "https://web-production-04707.up.railway.app",  # ✅ Your backend
     "http://localhost:3000",
     "http://localhost:5173",
 ]
 
-# Add Railway domain to trusted origins
+# ✅ Add Railway domain to trusted origins
 if RAILWAY_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_DOMAIN}')
 
-if FRONTEND_URL:
+if FRONTEND_URL and FRONTEND_URL not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
+
+if BACKEND_URL and BACKEND_URL not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(BACKEND_URL)
+
+# ✅ ============ EMAIL CONFIGURATION ============
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <noreply@chiamoorder.com>')
 
 # ============ SESSION SETTINGS ============
 SESSION_COOKIE_SECURE = not DEBUG
