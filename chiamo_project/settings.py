@@ -1,5 +1,5 @@
-# chiamo_project/settings.py - Production Ready
 
+import os
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -86,6 +86,29 @@ TEMPLATES = [
     },
 ]
 
+
+# ✅ Production URL Configuration
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://your-app-name.vercel.app')
+BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
+
+# ✅ Site URL should point to frontend (where users interact)
+SITE_URL = FRONTEND_URL
+
+# ✅ Email configuration
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <noreply@chiamoorder.com>')
+
+# ✅ CORS settings
+CORS_ALLOWED_ORIGINS = [
+    FRONTEND_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# ✅ CSRF settings
+CSRF_TRUSTED_ORIGINS = [
+    FRONTEND_URL,
+    BACKEND_URL,
+]
 # ============ WSGI ============
 WSGI_APPLICATION = 'chiamo_project.wsgi.application'
 
