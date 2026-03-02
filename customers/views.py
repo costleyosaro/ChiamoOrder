@@ -809,11 +809,11 @@ def send_password_reset_email(user, reset_link):
     context = {
         "user": user,
         "reset_link": reset_link,
-        "domain": getattr(settings, 'SITE_URL', 'https://your-app-name.vercel.app'),  # ✅ Use frontend URL
-        "frontend_url": getattr(settings, 'FRONTEND_URL', 'https://your-app-name.vercel.app'),  # ✅ Frontend URL
+        "domain": getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/'),  # ✅ Use frontend URL
+        "frontend_url": getattr(settings, 'FRONTEND_URL', 'https://chiamo-frontend.vercel.app/'),  # ✅ Frontend URL
         "backend_url": getattr(settings, 'BACKEND_URL', 'https://web-production-04707.up.railway.app'),  # ✅ Backend URL
-        "login_url": f"{getattr(settings, 'SITE_URL', 'https://your-app-name.vercel.app')}/login",  # ✅ Login page
-        "support_url": f"{getattr(settings, 'SITE_URL', 'https://your-app-name.vercel.app')}/support",  # ✅ Support page
+        "login_url": f"{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/')}/login",  # ✅ Login page
+        "support_url": f"{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/')}/support",  # ✅ Support page
         "year": datetime.datetime.now().year,
     }
 
