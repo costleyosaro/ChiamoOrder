@@ -1,5 +1,4 @@
 import os
-import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -37,7 +36,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'corsheaders',
+    'corsheaders',  # ✅ CORS headers
     'axes',
     
     # Your apps
@@ -51,9 +50,9 @@ AUTH_USER_MODEL = 'customers.User'
 
 # ============ MIDDLEWARE ============
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # ✅ MUST BE FIRST
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -178,63 +177,52 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# ✅ ============ PRODUCTION URL CONFIGURATION ============
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://chiamo-order.netlify.app')
-BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
-SITE_URL = FRONTEND_URL
-
-# ✅ ============ CORS SETTINGS (FIXED - NO TRAILING SLASHES) ============
-CORS_ALLOWED_ORIGINS = [
-    "https://chiamo-order.netlify.app",  # ✅ NO trailing slash
-    "http://localhost:3000",
-    "http://localhost:5173", 
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-]
-
-# ✅ Add environment frontend URL if different (ensure no trailing slash)
-if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
-    # Remove trailing slash if present
-    clean_frontend_url = FRONTEND_URL.rstrip('/')
-    CORS_ALLOWED_ORIGINS.append(clean_frontend_url)
-
-# ✅ CORS Configuration
+# ============ CORS SETTINGS (SIMPLIFIED AND FIXED) ============
+CORS_ALLOW_ALL_ORIGINS = True  # ✅ Allow all origins for now
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # ✅ Set to False for security
 
 CORS_ALLOW_METHODS = [
-    'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT',
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
 ]
 
 CORS_ALLOW_HEADERS = [
-    'accept', 'accept-encoding', 'authorization', 'content-type',
-    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
-# ✅ ============ CSRF SETTINGS (FIXED - NO TRAILING SLASHES) ============
+CORS_PREFLIGHT_MAX_AGE = 86400
+
+# ============ CSRF SETTINGS ============
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://chiamo-order.netlify.app",  # ✅ NO trailing slash
-    "https://web-production-04707.up.railway.app",  # ✅ NO trailing slash
+    "https://chiamo-order.netlify.app",
+    "https://web-production-04707.up.railway.app",
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
 ]
 
-# ✅ Add Railway domain to trusted origins (ensure no trailing slash)
+# Add Railway domain to trusted origins
 if RAILWAY_DOMAIN:
-    clean_railway_url = f'https://{RAILWAY_DOMAIN}'.rstrip('/')
-    CSRF_TRUSTED_ORIGINS.append(clean_railway_url)
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_DOMAIN}')
 
-if FRONTEND_URL and FRONTEND_URL.rstrip('/') not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL.rstrip('/'))
-
-if BACKEND_URL and BACKEND_URL.rstrip('/') not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(BACKEND_URL.rstrip('/'))
-
-# ✅ ============ EMAIL CONFIGURATION ============
+# ============ EMAIL CONFIGURATION ============
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <noreply@chiamoorder.com>')
 
 # ============ SESSION SETTINGS ============
@@ -314,6 +302,11 @@ LOGGING = {
         'django': {
             'handlers': ['console'],
             'level': 'INFO',
+            'propagate': False,
+        },
+        'corsheaders': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
             'propagate': False,
         },
     },
