@@ -179,13 +179,13 @@ SIMPLE_JWT = {
 }
 
 # ✅ ============ PRODUCTION URL CONFIGURATION ============
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://chiamo-frontend.vercel.app')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://chiamo-order.netlify.app')
 BACKEND_URL = os.getenv('BACKEND_URL', 'https://web-production-04707.up.railway.app')
 SITE_URL = FRONTEND_URL
 
 # ✅ ============ CORS SETTINGS (FIXED - NO TRAILING SLASHES) ============
 CORS_ALLOWED_ORIGINS = [
-    "https://chiamo-frontend.vercel.app",  # ✅ NO trailing slash
+    "https://chiamo-order.netlify.app",  # ✅ NO trailing slash
     "http://localhost:3000",
     "http://localhost:5173", 
     "http://127.0.0.1:3000",
@@ -217,7 +217,7 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://chiamo-frontend.vercel.app",  # ✅ NO trailing slash
+    "https://chiamo-order.netlify.app",  # ✅ NO trailing slash
     "https://web-production-04707.up.railway.app",  # ✅ NO trailing slash
     "http://localhost:3000",
     "http://localhost:5173",
