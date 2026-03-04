@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from .serializers import RegisterSerializer
 from django.contrib.auth import authenticate, get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -67,58 +67,75 @@ def log_pin_activity(user, action, request, details=None):
 # REGISTER VIEW
 # ==========================
 class RegisterView(generics.CreateAPIView):
-    # ... existing code ...
+    queryset = User.objects.all()
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]   
 
     def perform_create(self, serializer):
         user = serializer.save()
 
-        # ✅ Send Welcome Email with production URLs
-        subject = "🎉 Welcome to ChiamoOrder!"
-        context = {
-            "user": user,
-            "domain": getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/'),  # ✅ Frontend URL
-            "login_url": f"{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/')}/login",
-            "dashboard_url": f"{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app/')}/home",
-            "year": datetime.datetime.now().year,
-        }
-
-        html_message = render_to_string("emails/welcome_email.html", context)
-        plain_message = strip_tags(html_message)
-
-        from_email = settings.DEFAULT_FROM_EMAIL
-        recipient_list = [user.email]
-
+        # =========================
+        # ✅ SEND WELCOME EMAIL
+        # =========================
         try:
+            subject = "🎉 Welcome to ChiamoOrder!"
+            site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.vercel.app")
+
+            context = {
+                "user": user,
+                "domain": site_url,
+                "login_url": f"{site_url}/login",
+                "dashboard_url": f"{site_url}/home",
+                "year": datetime.datetime.now().year,
+            }
+
+            html_message = render_to_string("emails/welcome_email.html", context)
+            plain_message = strip_tags(html_message)
+
             email = EmailMultiAlternatives(
-                subject, plain_message, from_email, recipient_list
+                subject,
+                plain_message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
             )
             email.attach_alternative(html_message, "text/html")
             email.send()
+
             print(f"📩 Welcome email sent to {user.email}")
+
         except Exception as e:
-            print("❌ Email sending failed:", e)
+            print("❌ Email sending failed:", str(e))
 
-        # Send Welcome SMS (Termii)
-        TERMII_API_KEY = os.getenv("TERMII_API_KEY")
-        TERMII_BASE_URL = "https://api.ng.termii.com/api/sms/send"
-        TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
-
-        sms_payload = {
-            "to": user.phone,
-            "from": TERMII_SENDER_ID,
-            "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉. "
-                   f"Your business '{user.business_name}' has been registered successfully.",
-            "type": "plain",
-            "channel": "generic",
-            "api_key": TERMII_API_KEY,
-        }
-
+        # =========================
+        # ✅ SEND WELCOME SMS (TERMII)
+        # =========================
         try:
-            response = requests.post(TERMII_BASE_URL, json=sms_payload)
-            print("📲 Termii SMS response:", response.json())
-        except Exception as e:
-            print("❌ SMS sending failed:", e)
+            TERMII_API_KEY = os.getenv("TERMII_API_KEY")
+            TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
 
+            if TERMII_API_KEY:
+                sms_payload = {
+                    "to": user.phone,
+                    "from": TERMII_SENDER_ID,
+                    "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉. "
+                           f"Your business '{user.business_name}' has been registered successfully.",
+                    "type": "plain",
+                    "channel": "generic",
+                    "api_key": TERMII_API_KEY,
+                }
+
+                response = requests.post(
+                    "https://api.ng.termii.com/api/sms/send",
+                    json=sms_payload,
+                    timeout=10
+                )
+
+                print("📲 Termii SMS response:", response.json())
+            else:
+                print("⚠️ TERMII_API_KEY not set. SMS skipped.")
+
+        except Exception as e:
+            print("❌ SMS sending failed:", str(e))
 
 # ==========================
 # ✅ ENHANCED TRANSACTION PIN VIEWS (FINTECH-GRADE)
