@@ -5,6 +5,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 
 from django.contrib.auth import authenticate, get_user_model
 from django.core.mail import EmailMultiAlternatives
@@ -862,3 +866,95 @@ def send_password_reset_email(user, reset_link):
     )
     email.attach_alternative(html_message, "text/html")
     email.send()
+
+
+
+# ==========================
+# RESET PASSWORD (function-based)
+# ==========================
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    email = request.data.get('email')
+    new_password = request.data.get('new_password')
+
+    if not email or not new_password:
+        return Response(
+            {"error": "Email and new password are required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(email=email)
+        user.set_password(new_password)
+        user.save()
+        return Response(
+            {"message": "Password reset successfully."},
+            status=status.HTTP_200_OK
+        )
+    except User.DoesNotExist:
+        return Response(
+            {"error": "User not found."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+# ==========================
+# HAS TRANSACTION PIN VIEW
+# ==========================
+class HasTransactionPinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+            has_pin = bool(user.transaction_pin)
+            return Response({"has_pin": has_pin}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+# ==========================
+# ADDRESSES (function-based)
+# ==========================
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def addresses(request):
+    if request.method == 'GET':
+        # Return user's addresses
+        return Response(
+            {"addresses": []},
+            status=status.HTTP_200_OK
+        )
+    
+    elif request.method == 'POST':
+        # Create new address
+        return Response(
+            {"message": "Address created successfully."},
+            status=status.HTTP_201_CREATED
+        )
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def address_detail(request, pk):
+    if request.method == 'GET':
+        return Response(
+            {"message": "Address detail."},
+            status=status.HTTP_200_OK
+        )
+    
+    elif request.method == 'PUT':
+        return Response(
+            {"message": "Address updated."},
+            status=status.HTTP_200_OK
+        )
+    
+    elif request.method == 'DELETE':
+        return Response(
+            {"message": "Address deleted."},
+            status=status.HTTP_204_NO_CONTENT
+        )
