@@ -315,17 +315,25 @@ LOGGING = {
 import os
 
 # ==========================
-# EMAIL SETTINGS
+# EMAIL SETTINGS (with port 465 fallback)
 # ==========================
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = f"ChiamoOrder <{os.getenv('EMAIL_HOST_USER')}>"
+EMAIL_PORT = 465                # ← Changed to 465
+EMAIL_USE_TLS = False           # ← Must be False for port 465
+EMAIL_USE_SSL = True            # ← Must be True for port 465
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = f"ChiamoOrder <{EMAIL_HOST_USER}>"
 
-# ==========================
-# SITE URL
-# ==========================
+# Debug
+print("=" * 50)
+print(f"📧 EMAIL_HOST: {EMAIL_HOST}")
+print(f"📧 EMAIL_PORT: {EMAIL_PORT}")
+print(f"📧 EMAIL_USE_SSL: {EMAIL_USE_SSL}")
+print(f"📧 EMAIL_HOST_USER: {EMAIL_HOST_USER}")
+print(f"📧 EMAIL_HOST_PASSWORD SET: {bool(EMAIL_HOST_PASSWORD)}")
+print(f"📧 PASSWORD LENGTH: {len(EMAIL_HOST_PASSWORD) if EMAIL_HOST_PASSWORD else 0}")
+print("=" * 50)
+
 SITE_URL = os.getenv('SITE_URL', 'https://chiamo-frontend.netlify.app')
