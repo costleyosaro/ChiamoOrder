@@ -319,9 +319,9 @@ import os
 # ==========================
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465                # ← Changed to 465
-EMAIL_USE_TLS = False           # ← Must be False for port 465
-EMAIL_USE_SSL = True            # ← Must be True for port 465
+EMAIL_PORT = 587                # ← Changed to 465
+EMAIL_USE_TLS = True           # ← Must be False for port 465
+EMAIL_USE_SSL = False           # ← Must be True for port 465
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = f"ChiamoOrder <{EMAIL_HOST_USER}>"

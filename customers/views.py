@@ -72,59 +72,70 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 # ==========================
 # REGISTER VIEW (NUCLEAR FIX)
 # ==========================
+import threading
+
 @api_view(['POST'])
-@authentication_classes([])       # NO auth check
-@permission_classes([AllowAny])   # Allow everyone
+@authentication_classes([])
+@permission_classes([AllowAny])
 def register_view(request):
-    """Registration endpoint - no authentication required"""
-    print("🟢 REGISTER VIEW HIT - NEW CODE IS RUNNING!")  # Debug proof
-    
+    print("🟢 REGISTER VIEW HIT")
+
     serializer = UserSerializer(data=request.data)
     if not serializer.is_valid():
         print("❌ Validation errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     user = serializer.save()
-    
-    # Send welcome email (non-blocking)
-    try:
-        subject = "🎉 Welcome to ChiamoOrder!"
-        site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.vercel.app")
-        context = {
-            "user": user,
-            "domain": site_url,
-            "login_url": f"{site_url}/login",
-            "dashboard_url": f"{site_url}/home",
-            "year": datetime.datetime.now().year,
-        }
-        html_message = render_to_string("emails/welcome_email.html", context)
-        plain_message = strip_tags(html_message)
-        email_msg = EmailMultiAlternatives(
-            subject, plain_message, settings.DEFAULT_FROM_EMAIL, [user.email],
-        )
-        email_msg.attach_alternative(html_message, "text/html")
-        email_msg.send()
-        print(f"📩 Welcome email sent to {user.email}")
-    except Exception as e:
-        print("❌ Email sending failed:", str(e))
 
-    # Send SMS (non-blocking)
-    try:
-        TERMII_API_KEY = os.getenv("TERMII_API_KEY")
-        TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
-        if TERMII_API_KEY:
-            sms_payload = {
-                "to": user.phone,
-                "from": TERMII_SENDER_ID,
-                "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉.",
-                "type": "plain",
-                "channel": "generic",
-                "api_key": TERMII_API_KEY,
+    # ✅ Send welcome email in BACKGROUND
+    def send_welcome_email():
+        try:
+            subject = "🎉 Welcome to ChiamoOrder!"
+            site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.netlify.app")
+            context = {
+                "user": user,
+                "domain": site_url,
+                "login_url": f"{site_url}/login",
+                "dashboard_url": f"{site_url}/home",
+                "year": datetime.datetime.now().year,
             }
-            requests.post("https://api.ng.termii.com/api/sms/send", json=sms_payload, timeout=10)
-    except Exception as e:
-        print("❌ SMS sending failed:", str(e))
+            html_message = render_to_string("emails/welcome_email.html", context)
+            plain_message = strip_tags(html_message)
+            email_msg = EmailMultiAlternatives(
+                subject, plain_message, settings.DEFAULT_FROM_EMAIL, [user.email],
+            )
+            email_msg.attach_alternative(html_message, "text/html")
+            email_msg.send()
+            print(f"📩 Welcome email sent to {user.email}")
+        except Exception as e:
+            print(f"❌ Email failed: {str(e)}")
 
+    # ✅ Send SMS in BACKGROUND
+    def send_welcome_sms():
+        try:
+            TERMII_API_KEY = os.getenv("TERMII_API_KEY")
+            TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
+            if TERMII_API_KEY:
+                sms_payload = {
+                    "to": user.phone,
+                    "from": TERMII_SENDER_ID,
+                    "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉.",
+                    "type": "plain",
+                    "channel": "generic",
+                    "api_key": TERMII_API_KEY,
+                }
+                requests.post(
+                    "https://api.ng.termii.com/api/sms/send",
+                    json=sms_payload, timeout=10
+                )
+        except Exception as e:
+            print(f"❌ SMS failed: {str(e)}")
+
+    # Start background threads
+    threading.Thread(target=send_welcome_email, daemon=True).start()
+    threading.Thread(target=send_welcome_sms, daemon=True).start()
+
+    # ✅ Return IMMEDIATELY
     return Response({
         "message": "Registration successful! 🎉",
         "user": {
@@ -134,7 +145,6 @@ def register_view(request):
             "email": user.email,
         }
     }, status=status.HTTP_201_CREATED)
-
 # ==========================
 # ✅ ENHANCED TRANSACTION PIN VIEWS (FINTECH-GRADE)
 # ==========================
@@ -408,9 +418,12 @@ class LoginView(APIView):
 # ==========================
 # PASSWORD RESET VIEWS
 # ==========================
+
+import threading
+
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
-    authentication_classes = []  # ← ADD THIS!
+    authentication_classes = []
 
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
@@ -418,76 +431,54 @@ class ForgotPasswordView(APIView):
         if not email:
             return Response({"error": "Email is required."}, status=400)
 
-        # Always return success (don't reveal if email exists)
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Return success anyway for security
             return Response(
                 {"message": "If an account with this email exists, a reset link has been sent."},
                 status=200
             )
 
-        try:
-            # ✅ Use getattr to prevent AttributeError if SITE_URL not set
-            site_url = getattr(
-                settings, 
-                "SITE_URL", 
-                "https://chiamo-frontend.vercel.app"
-            )
+        # Generate reset token
+        site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.netlify.app")
+        token = default_token_generator.make_token(user)
+        reset_link = f"{site_url}/reset-password/{user.pk}/{token}/"
 
-            # Generate reset token
-            token = default_token_generator.make_token(user)
-            reset_link = f"{site_url}/reset-password/{user.pk}/{token}/"
-
-            subject = "Reset Your Password - ChiamoOrder"
-            message = (
-                f"Hi {user.business_name or user.name or 'User'},\n\n"
-                f"You requested a password reset for your ChiamoOrder account.\n\n"
-                f"Click the link below to reset your password:\n"
-                f"{reset_link}\n\n"
-                f"This link will expire in 24 hours.\n\n"
-                f"If you didn't request this, please ignore this email.\n\n"
-                f"Best regards,\n"
-                f"ChiamoOrder Team"
-            )
-
-            # Send email
+        # ✅ Send email in BACKGROUND THREAD (don't block response!)
+        def send_reset_email():
             try:
                 from django.core.mail import send_mail
                 send_mail(
-                    subject=subject,
-                    message=message,
-                    from_email=getattr(
-                        settings, 
-                        "DEFAULT_FROM_EMAIL", 
-                        "noreply@chiamoorder.com"
+                    subject="Reset Your Password - ChiamoOrder",
+                    message=(
+                        f"Hi {user.business_name or user.name or 'User'},\n\n"
+                        f"You requested a password reset.\n\n"
+                        f"Click here to reset your password:\n"
+                        f"{reset_link}\n\n"
+                        f"This link expires in 24 hours.\n\n"
+                        f"If you didn't request this, ignore this email.\n\n"
+                        f"- ChiamoOrder Team"
                     ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[user.email],
                     fail_silently=False,
                 )
                 print(f"📩 Password reset email sent to {user.email}")
+            except Exception as e:
+                print(f"❌ Email sending failed: {str(e)}")
+                import traceback
+                traceback.print_exc()
 
-            except Exception as email_error:
-                print(f"❌ Email sending failed: {email_error}")
-                # Still return success — don't expose email failure to user
-                # But log it for debugging
+        # Start background thread
+        thread = threading.Thread(target=send_reset_email)
+        thread.daemon = True
+        thread.start()
 
-            return Response(
-                {"message": "Password reset link has been sent to your email 📩"},
-                status=200
-            )
-
-        except Exception as e:
-            print(f"❌ Forgot password error: {str(e)}")
-            import traceback
-            traceback.print_exc()  # Full error in Railway logs
-            return Response(
-                {"error": "Something went wrong. Please try again later."},
-                status=500
-            )
-
-
+        # ✅ Return IMMEDIATELY — don't wait for email
+        return Response(
+            {"message": "Password reset link has been sent to your email 📩"},
+            status=200
+        )
 
 # ==========================
 # PROFILE VIEW
