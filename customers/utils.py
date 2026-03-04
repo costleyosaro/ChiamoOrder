@@ -1,37 +1,57 @@
-import resend
 import os
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 from django.conf import settings
 
 
 def send_email(to, subject, html_content, plain_text=None):
     """
-    Send email using Resend API (works on Railway!)
+    Send email using Brevo API (works on Railway!)
+    Free: 300 emails/day, no domain verification needed
     """
-    api_key = getattr(settings, 'RESEND_API_KEY', '') or os.getenv('RESEND_API_KEY', '')
+    api_key = os.getenv('BREVO_API_KEY', '')
 
     if not api_key:
-        print("❌ RESEND_API_KEY not set. Email skipped.")
+        print("❌ BREVO_API_KEY not set. Email skipped.")
         return False
 
     try:
-        resend.api_key = api_key
+        # Configure API
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = api_key
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+            sib_api_v3_sdk.ApiClient(configuration)
+        )
 
-        params = {
-            "from": getattr(settings, 'DEFAULT_FROM_EMAIL', 'ChiamoOrder <onboarding@resend.dev>'),
-            "to": [to] if isinstance(to, str) else to,
-            "subject": subject,
-            "html": html_content,
+        # Build email
+        sender = {
+            "name": "ChiamoOrder",
+            "email": os.getenv('SENDER_EMAIL', 'chiamoorder@gmail.com')
         }
 
-        if plain_text:
-            params["text"] = plain_text
+        to_list = [{"email": to}] if isinstance(to, str) else [{"email": e} for e in to]
 
-        result = resend.Emails.send(params)
-        print(f"📩 Email sent to {to} | ID: {result.get('id', 'unknown')}")
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=to_list,
+            sender=sender,
+            subject=subject,
+            html_content=html_content,
+            text_content=plain_text or ""
+        )
+
+        # Send
+        result = api_instance.send_transac_email(send_smtp_email)
+        print(f"📩 Email sent to {to} | Message ID: {result.message_id}")
         return True
 
+    except ApiException as e:
+        print(f"❌ Brevo email failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
     except Exception as e:
-        print(f"❌ Resend email failed: {str(e)}")
+        print(f"❌ Email error: {str(e)}")
         import traceback
         traceback.print_exc()
         return False

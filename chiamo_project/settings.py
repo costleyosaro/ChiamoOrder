@@ -315,11 +315,12 @@ LOGGING = {
 import os
 
 # ==========================
-# EMAIL SETTINGS (Using Resend API - Railway blocks SMTP)
+# EMAIL SETTINGS (Using Brevo API - Railway blocks SMTP)
 # ==========================
-RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <onboarding@resend.dev>')
+BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'chiamoorder@gmail.com')
+DEFAULT_FROM_EMAIL = f"ChiamoOrder <{SENDER_EMAIL}>"
 SITE_URL = os.getenv('SITE_URL', 'https://chiamo-frontend.netlify.app')
 
-print(f"📧 RESEND_API_KEY SET: {bool(RESEND_API_KEY)}")
-print(f"📧 DEFAULT_FROM_EMAIL: {DEFAULT_FROM_EMAIL}")
+print(f"📧 BREVO_API_KEY SET: {bool(BREVO_API_KEY)}")
+print(f"📧 SENDER_EMAIL: {SENDER_EMAIL}")
