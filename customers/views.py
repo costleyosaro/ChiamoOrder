@@ -67,80 +67,73 @@ def log_pin_activity(user, action, request, details=None):
         print(f"Failed to log PIN activity: {e}")
 
 
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+
 # ==========================
-# REGISTER VIEW
+# REGISTER VIEW (NUCLEAR FIX)
 # ==========================
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-    authentication_classes = []     
+@api_view(['POST'])
+@authentication_classes([])       # NO auth check
+@permission_classes([AllowAny])   # Allow everyone
+def register_view(request):
+    """Registration endpoint - no authentication required"""
+    print("🟢 REGISTER VIEW HIT - NEW CODE IS RUNNING!")  # Debug proof
+    
+    serializer = UserSerializer(data=request.data)
+    if not serializer.is_valid():
+        print("❌ Validation errors:", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    user = serializer.save()
+    
+    # Send welcome email (non-blocking)
+    try:
+        subject = "🎉 Welcome to ChiamoOrder!"
+        site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.vercel.app")
+        context = {
+            "user": user,
+            "domain": site_url,
+            "login_url": f"{site_url}/login",
+            "dashboard_url": f"{site_url}/home",
+            "year": datetime.datetime.now().year,
+        }
+        html_message = render_to_string("emails/welcome_email.html", context)
+        plain_message = strip_tags(html_message)
+        email_msg = EmailMultiAlternatives(
+            subject, plain_message, settings.DEFAULT_FROM_EMAIL, [user.email],
+        )
+        email_msg.attach_alternative(html_message, "text/html")
+        email_msg.send()
+        print(f"📩 Welcome email sent to {user.email}")
+    except Exception as e:
+        print("❌ Email sending failed:", str(e))
 
-    def perform_create(self, serializer):
-        user = serializer.save()
-
-        # =========================
-        # ✅ SEND WELCOME EMAIL
-        # =========================
-        try:
-            subject = "🎉 Welcome to ChiamoOrder!"
-            site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.vercel.app")
-
-            context = {
-                "user": user,
-                "domain": site_url,
-                "login_url": f"{site_url}/login",
-                "dashboard_url": f"{site_url}/home",
-                "year": datetime.datetime.now().year,
+    # Send SMS (non-blocking)
+    try:
+        TERMII_API_KEY = os.getenv("TERMII_API_KEY")
+        TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
+        if TERMII_API_KEY:
+            sms_payload = {
+                "to": user.phone,
+                "from": TERMII_SENDER_ID,
+                "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉.",
+                "type": "plain",
+                "channel": "generic",
+                "api_key": TERMII_API_KEY,
             }
+            requests.post("https://api.ng.termii.com/api/sms/send", json=sms_payload, timeout=10)
+    except Exception as e:
+        print("❌ SMS sending failed:", str(e))
 
-            html_message = render_to_string("emails/welcome_email.html", context)
-            plain_message = strip_tags(html_message)
-
-            email = EmailMultiAlternatives(
-                subject,
-                plain_message,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-            )
-            email.attach_alternative(html_message, "text/html")
-            email.send()
-
-            print(f"📩 Welcome email sent to {user.email}")
-
-        except Exception as e:
-            print("❌ Email sending failed:", str(e))
-
-        # =========================
-        # ✅ SEND WELCOME SMS (TERMII)
-        # =========================
-        try:
-            TERMII_API_KEY = os.getenv("TERMII_API_KEY")
-            TERMII_SENDER_ID = os.getenv("TERMII_SENDER_ID", "ChiamoOrder")
-
-            if TERMII_API_KEY:
-                sms_payload = {
-                    "to": user.phone,
-                    "from": TERMII_SENDER_ID,
-                    "sms": f"Hi {user.name}, welcome to ChiamoOrder 🎉. "
-                           f"Your business '{user.business_name}' has been registered successfully.",
-                    "type": "plain",
-                    "channel": "generic",
-                    "api_key": TERMII_API_KEY,
-                }
-
-                response = requests.post(
-                    "https://api.ng.termii.com/api/sms/send",
-                    json=sms_payload,
-                    timeout=10
-                )
-
-                print("📲 Termii SMS response:", response.json())
-            else:
-                print("⚠️ TERMII_API_KEY not set. SMS skipped.")
-
-        except Exception as e:
-            print("❌ SMS sending failed:", str(e))
+    return Response({
+        "message": "Registration successful! 🎉",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "business_name": user.business_name,
+            "email": user.email,
+        }
+    }, status=status.HTTP_201_CREATED)
 
 # ==========================
 # ✅ ENHANCED TRANSACTION PIN VIEWS (FINTECH-GRADE)

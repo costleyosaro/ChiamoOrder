@@ -1,10 +1,14 @@
 from django.urls import path
 from . import views
-from .views import RegisterView, ThemeUpdateView, LoginView, SetPinView,ValidatePinView, ResetPinView, ForgotPasswordView,ProfileView
-from rest_framework.views import APIView
+from .views import (
+    ThemeUpdateView, LoginView, SetPinView,
+    ValidatePinView, ResetPinView, ForgotPasswordView, ProfileView
+)
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),
+    # ✅ Function-based register (nuclear fix)
+    path("register/", views.register_view, name="register"),
+    
     path("validate-pin/", ValidatePinView.as_view(), name="validate-pin"),
     path("set-pin/", SetPinView.as_view(), name="set-pin"),
     path("reset-pin/", ResetPinView.as_view(), name="reset-pin"),
@@ -16,6 +20,4 @@ urlpatterns = [
     path('has-transaction-pin/<int:pk>/', views.HasTransactionPinView.as_view(), name='has-transaction-pin'),
     path('addresses/', views.addresses, name='addresses'),
     path('addresses/<int:pk>/', views.address_detail, name='address_detail'),
-    
-]   
-
+]
