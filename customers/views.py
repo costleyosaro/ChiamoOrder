@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import RegisterSerializer
+
 from django.contrib.auth import authenticate, get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -68,7 +68,7 @@ def log_pin_activity(user, action, request, details=None):
 # ==========================
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
-    serializer_class = RegisterSerializer
+    serializer_class = UserSerializer,
     permission_classes = [AllowAny]   
 
     def perform_create(self, serializer):
