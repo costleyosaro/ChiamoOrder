@@ -315,25 +315,11 @@ LOGGING = {
 import os
 
 # ==========================
-# EMAIL SETTINGS (with port 465 fallback)
+# EMAIL SETTINGS (Using Resend API - Railway blocks SMTP)
 # ==========================
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587                # ← Changed to 465
-EMAIL_USE_TLS = True           # ← Must be False for port 465
-EMAIL_USE_SSL = False           # ← Must be True for port 465
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = f"ChiamoOrder <{EMAIL_HOST_USER}>"
-
-# Debug
-print("=" * 50)
-print(f"📧 EMAIL_HOST: {EMAIL_HOST}")
-print(f"📧 EMAIL_PORT: {EMAIL_PORT}")
-print(f"📧 EMAIL_USE_SSL: {EMAIL_USE_SSL}")
-print(f"📧 EMAIL_HOST_USER: {EMAIL_HOST_USER}")
-print(f"📧 EMAIL_HOST_PASSWORD SET: {bool(EMAIL_HOST_PASSWORD)}")
-print(f"📧 PASSWORD LENGTH: {len(EMAIL_HOST_PASSWORD) if EMAIL_HOST_PASSWORD else 0}")
-print("=" * 50)
-
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ChiamoOrder <onboarding@resend.dev>')
 SITE_URL = os.getenv('SITE_URL', 'https://chiamo-frontend.netlify.app')
+
+print(f"📧 RESEND_API_KEY SET: {bool(RESEND_API_KEY)}")
+print(f"📧 DEFAULT_FROM_EMAIL: {DEFAULT_FROM_EMAIL}")
