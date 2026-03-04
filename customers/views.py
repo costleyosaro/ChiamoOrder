@@ -410,72 +410,80 @@ class LoginView(APIView):
 # ==========================
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
-    
+    authentication_classes = []  # ← ADD THIS!
+
     def post(self, request):
+        email = request.data.get("email", "").strip().lower()
+
+        if not email:
+            return Response({"error": "Email is required."}, status=400)
+
+        # Always return success (don't reveal if email exists)
         try:
-            serializer = ForgotPasswordSerializer(data=request.data)
-            if not serializer.is_valid():
-                return Response(serializer.errors, status=400)
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Return success anyway for security
+            return Response(
+                {"message": "If an account with this email exists, a reset link has been sent."},
+                status=200
+            )
 
-            email = serializer.validated_data["email"]
-            
-            # ✅ Handle case where user doesn't exist
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                # Return success anyway for security (don't reveal if email exists)
-                return Response(
-                    {"message": "If an account with this email exists, a password reset link has been sent."}, 
-                    status=200
-                )
+        try:
+            # ✅ Use getattr to prevent AttributeError if SITE_URL not set
+            site_url = getattr(
+                settings, 
+                "SITE_URL", 
+                "https://chiamo-frontend.vercel.app"
+            )
 
-            # ✅ Generate reset token
+            # Generate reset token
             token = default_token_generator.make_token(user)
-            reset_link = f"{settings.SITE_URL}/reset-password/{user.pk}/{token}/"
+            reset_link = f"{site_url}/reset-password/{user.pk}/{token}/"
 
-            # ✅ Simple email content (no template needed)
             subject = "Reset Your Password - ChiamoOrder"
-            message = f"""
-            Hi {user.business_name or user.email},
+            message = (
+                f"Hi {user.business_name or user.name or 'User'},\n\n"
+                f"You requested a password reset for your ChiamoOrder account.\n\n"
+                f"Click the link below to reset your password:\n"
+                f"{reset_link}\n\n"
+                f"This link will expire in 24 hours.\n\n"
+                f"If you didn't request this, please ignore this email.\n\n"
+                f"Best regards,\n"
+                f"ChiamoOrder Team"
+            )
 
-            You requested a password reset for your ChiamoOrder account.
-
-            Click the link below to reset your password:
-            {reset_link}
-
-            If you didn't request this, please ignore this email.
-
-            Best regards,
-            ChiamoOrder Team
-            """
-
-            # ✅ Send simple text email
+            # Send email
             try:
                 from django.core.mail import send_mail
                 send_mail(
                     subject=subject,
                     message=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    from_email=getattr(
+                        settings, 
+                        "DEFAULT_FROM_EMAIL", 
+                        "noreply@chiamoorder.com"
+                    ),
                     recipient_list=[user.email],
                     fail_silently=False,
                 )
-            except Exception as email_error:
-                # ✅ Log email error but still return success
-                print(f"Email sending failed: {email_error}")
-                # For development, you might want to return the reset link
-                if settings.DEBUG:
-                    return Response({
-                        "message": "Password reset email sent successfully 📩",
-                        "debug_reset_link": reset_link  # Remove this in production
-                    }, status=200)
+                print(f"📩 Password reset email sent to {user.email}")
 
-            return Response({"message": "Password reset email sent successfully 📩"}, status=200)
+            except Exception as email_error:
+                print(f"❌ Email sending failed: {email_error}")
+                # Still return success — don't expose email failure to user
+                # But log it for debugging
+
+            return Response(
+                {"message": "Password reset link has been sent to your email 📩"},
+                status=200
+            )
 
         except Exception as e:
-            # ✅ Catch any other errors
-            print(f"Forgot password error: {str(e)}")
+            print(f"❌ Forgot password error: {str(e)}")
+            import traceback
+            traceback.print_exc()  # Full error in Railway logs
             return Response(
-                {"error": "Something went wrong. Please try again later."}, 
+                {"error": "Something went wrong. Please try again later."},
                 status=500
             )
 
