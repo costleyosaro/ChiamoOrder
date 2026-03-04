@@ -10,7 +10,6 @@ urlpatterns = [
     path("reset-pin/", ResetPinView.as_view(), name="reset-pin"),
     path("login/", LoginView.as_view(), name="login"),
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
-    path("verify-otp/", views.verify_otp, name="verify-otp"),
     path("reset-password/", views.reset_password, name="reset-password"),
     path("profile/", ProfileView.as_view(), name="profile"),
     path("theme/", ThemeUpdateView.as_view(), name="theme-update"),
