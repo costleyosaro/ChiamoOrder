@@ -68,7 +68,7 @@ def log_pin_activity(user, action, request, details=None):
 # ==========================
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
-    serializer_class = UserSerializer,
+    serializer_class = UserSerializer
     permission_classes = [AllowAny]   
 
     def perform_create(self, serializer):
