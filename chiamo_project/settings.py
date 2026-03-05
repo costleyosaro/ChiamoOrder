@@ -210,7 +210,7 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://chiamo-order.netlify.app",
+    "https://chiamo-order.vercel.app",
     "https://web-production-04707.up.railway.app",
     "http://localhost:3000",
     "http://localhost:5173",
@@ -320,7 +320,7 @@ import os
 BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
 SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'chiamoorder@gmail.com')
 DEFAULT_FROM_EMAIL = f"ChiamoOrder <{SENDER_EMAIL}>"
-SITE_URL = os.getenv('SITE_URL', 'https://chiamo-frontend.netlify.app')
+SITE_URL = os.getenv('SITE_URL', 'https://chiamo-frontend.vercel.app')
 
 print(f"📧 BREVO_API_KEY SET: {bool(BREVO_API_KEY)}")
 print(f"📧 SENDER_EMAIL: {SENDER_EMAIL}")

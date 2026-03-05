@@ -96,7 +96,7 @@ def register_view(request):
             <p>Hi {user.name},</p>
             <p>Your business <strong>'{user.business_name}'</strong> has been registered successfully!</p>
             <p>You can now log in and start ordering:</p>
-            <a href="{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.netlify.app')}/login" 
+            <a href="{getattr(settings, 'SITE_URL', 'https://chiamo-frontend.vercel.app')}/login" 
                style="display: inline-block; padding: 12px 24px;
                       background-color: #4CAF50; color: white;
                       text-decoration: none; border-radius: 5px;
@@ -440,7 +440,7 @@ class ForgotPasswordView(APIView):
             )
 
         # Generate reset token
-        site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.netlify.app")
+        site_url = getattr(settings, "SITE_URL", "https://chiamo-frontend.vercel.app")
         token = default_token_generator.make_token(user)
         reset_link = f"{site_url}/reset-password/{user.pk}/{token}/"
 
