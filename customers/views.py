@@ -483,8 +483,6 @@ class ForgotPasswordView(APIView):
             status=200
         )
 
-from django.contrib.auth.tokens import default_token_generator
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -496,7 +494,7 @@ def reset_password_confirm(request):
 
     if not uid or not token or not new_password:
         return Response(
-            {"error": "User ID, token, and new password are required."},
+            {"error": "All fields are required."},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -514,23 +512,21 @@ def reset_password_confirm(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # ✅ Validate the token
     if not default_token_generator.check_token(user, token):
         return Response(
-            {"error": "Reset link has expired or is invalid. Please request a new one."},
+            {"error": "Reset link has expired. Please request a new one."},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # ✅ Set new password
     user.set_password(new_password)
     user.save()
 
     print(f"✅ Password reset successful for {user.email}")
 
     return Response(
-        {"message": "Password reset successfully! You can now log in."},
+        {"message": "Password reset successfully!"},
         status=status.HTTP_200_OK
-    )        
+    )       
 
 # ==========================
 # PROFILE VIEW
