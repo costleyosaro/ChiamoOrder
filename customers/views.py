@@ -332,46 +332,53 @@ class SetPinView(APIView):
 
 class ValidatePinView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def post(self, request):
-        # Use the new secure endpoint
-        return validate_transaction_pin(request)
+        pin = request.data.get('pin')
 
-
-class ResetPinView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        old_pin = request.data.get("old_pin")
-        password = request.data.get("password")
-        new_pin = request.data.get("new_pin")
-
-        if not new_pin:
-            return Response({"error": "New PIN is required"}, status=400)
+        if not pin:
+            return Response({'error': 'PIN is required'}, status=400)
 
         try:
-            # If old PIN provided, use change PIN method
-            if old_pin:
-                request.user.change_transaction_pin(old_pin, new_pin)
-                log_pin_activity(request.user, 'CHANGE', request, {'method': 'old_pin'})
-                return Response({"message": "PIN reset successfully"}, status=200)
+            user = request.user
 
-            # If password provided, verify and set new PIN
-            if password and request.user.check_password(password):
-                request.user.set_transaction_pin(new_pin)
-                log_pin_activity(request.user, 'RESET', request, {'method': 'password'})
-                return Response({"message": "PIN reset successfully"}, status=200)
+            # Check if user has a PIN set
+            if not user.has_pin:
+                return Response({
+                    'valid': False,
+                    'message': 'Transaction PIN not set',
+                    'error': 'Transaction PIN not set. Please set one first.'
+                }, status=400)
 
-            return Response({"error": "Either old PIN or password is required for authorization"}, status=400)
+            # Validate the PIN
+            is_valid = user.validate_transaction_pin(pin)
+
+            return Response({
+                'valid': True,
+                'message': 'PIN validated successfully'
+            }, status=200)
 
         except ValidationError as e:
-            log_pin_activity(request.user, 'RESET', request, {
-                'success': False,
-                'error': str(e),
-                'method': 'old_pin' if old_pin else 'password'
-            })
-            return Response({"error": str(e)}, status=400)
+            error_msg = str(e)
+            # Handle list-type validation errors
+            if hasattr(e, 'message'):
+                error_msg = e.message
+            elif isinstance(e.args[0], list):
+                error_msg = e.args[0][0] if e.args[0] else str(e)
 
+            return Response({
+                'valid': False,
+                'error': error_msg
+            }, status=400)
+
+        except Exception as e:
+            print(f"❌ PIN validation error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'valid': False,
+                'error': 'PIN validation failed. Please try again.'
+            }, status=500)
 
 # ==========================
 # LOGIN VIEW
