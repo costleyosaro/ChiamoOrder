@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     # Your apps
     'customers',
     'products',
-    'orders',
     'orders.apps.OrdersConfig',
 ]
 
