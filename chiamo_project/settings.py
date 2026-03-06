@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'customers',
     'products',
     'orders',
+    'orders.apps.OrdersConfig',
 ]
 
 # ============ CUSTOM USER MODEL ============

@@ -86,10 +86,26 @@ class SupportMessageSerializer(serializers.ModelSerializer):
 
 
 # orders/serializers.py
+
 from rest_framework import serializers
 from .models import Notification
+
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ["id", "title", "message", "is_read", "created_at"]
+        fields = [
+            "id",
+            "title",
+            "message",
+            "type",
+            "order_id",
+            "is_read",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def create(self, validated_data):
+        """Automatically assign the logged-in user."""
+        validated_data["user"] = self.context["request"].user
+        return super().create(validated_data)

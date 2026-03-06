@@ -137,30 +137,34 @@ class SupportMessage(models.Model):
 
 # orders/models.py
 
-# orders/models.py
-from django.conf import settings
 from django.db import models
+from django.conf import settings
+
 
 class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ("order", "Order"),
+        ("payment", "Payment"),
+        ("delivery", "Delivery"),
+        ("support", "Support"),
+        ("system", "System"),
+        ("promo", "Promo"),
+    ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="notifications"
+        related_name="notifications",
     )
     title = models.CharField(max_length=200)
     message = models.TextField()
     type = models.CharField(
         max_length=50,
-        choices=[
-            ("order", "Order"),
-            ("payment", "Payment"),
-            ("delivery", "Delivery"),
-            ("support", "Support"),
-            ("system", "System"),
-            ("promo", "Promo"),
-        ],
-        default="system"
+        choices=NOTIFICATION_TYPES,
+        default="system",
     )
+    # ✅ NEW: Optional link to an order
+    order_id = models.CharField(max_length=100, blank=True, null=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -168,4 +172,6 @@ class Notification(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.user} - {self.title}"
+        return f"{self.user} — {self.title}"
+
+

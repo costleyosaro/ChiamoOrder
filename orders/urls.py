@@ -2,7 +2,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import support_message, mark_notification_read
-from .views import NotificationListView
+from .views import (
+    NotificationListCreateView,
+    mark_notification_read,
+    mark_all_notifications_read,
+    delete_notification,
+    delete_all_notifications,
+)
 from .views import (
     CartView,
     AddToCartView,
@@ -62,8 +68,34 @@ urlpatterns = [
     # -------------------------------
     path("user-orders/", include(router.urls)),
     path('support/messages/', support_message, name='support_message'),
-    path("notifications/", NotificationListView.as_view(), name="notifications"),
-    path("notifications/<int:pk>/mark_read/", mark_notification_read, name="mark_notification_read"),
+    
+    # ✅ Notifications
+    path(
+        "notifications/",
+        NotificationListCreateView.as_view(),
+        name="notification-list-create",
+    ),
+    path(
+        "notifications/mark-all-read/",
+        mark_all_notifications_read,
+        name="mark-all-notifications-read",
+    ),
+    path(
+        "notifications/delete-all/",
+        delete_all_notifications,
+        name="delete-all-notifications",
+    ),
+    path(
+        "notifications/<int:pk>/mark_read/",
+        mark_notification_read,
+        name="mark-notification-read",
+    ),
+    path(
+        "notifications/<int:pk>/delete/",
+        delete_notification,
+        name="delete-notification",
+    ),
+
 
 ]
 print("SMARTLIST URLS LOADED")

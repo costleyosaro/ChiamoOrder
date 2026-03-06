@@ -957,38 +957,78 @@ def support_message(request):
 
 # orders/views.py
 
-from .models import Notification
+from rest_framework import generics, permissions, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
 
-def create_order_notification(user, order, event):
-    messages = {
-        "placed": f"Your order #{order.id} has been placed successfully.",
-        "shipped": f"Good news! Order #{order.id} is on the way.",
-        "delivered": f"Your order #{order.id} has been delivered successfully.",
-    }
-    
-    Notification.objects.create(
-        user=user,
-        title="Order Update",
-        message=messages.get(event, "Order update"),
-        type="order"
-    )
-
-# orders/views.py
-from rest_framework import generics, permissions
 from .models import Notification
 from .serializers import NotificationSerializer
 
-class NotificationListView(generics.ListAPIView):
+
+# ============ UTILITY (call from anywhere in your backend) ============
+
+def create_order_notification(user, order, event="placed"):
+    """
+    Utility to create a notification from backend code
+    (e.g., after checkout, from signals, admin actions, etc.)
+    """
+    messages = {
+        "placed": {
+            "title": "Order Placed Successfully! 🎉",
+            "message": f"Your order #{order.id} has been placed and is being processed.",
+            "type": "order",
+        },
+        "confirmed": {
+            "title": "Order Confirmed! ✅",
+            "message": f"Your order #{order.id} has been confirmed and is being prepared.",
+            "type": "order",
+        },
+        "shipped": {
+            "title": "Order Shipped! 🚚",
+            "message": f"Good news! Your order #{order.id} is on the way.",
+            "type": "delivery",
+        },
+        "delivered": {
+            "title": "Order Delivered! 📦",
+            "message": f"Your order #{order.id} has been delivered successfully.",
+            "type": "delivery",
+        },
+        "cancelled": {
+            "title": "Order Cancelled ❌",
+            "message": f"Your order #{order.id} has been cancelled.",
+            "type": "order",
+        },
+    }
+
+    data = messages.get(event, messages["placed"])
+
+    return Notification.objects.create(
+        user=user,
+        title=data["title"],
+        message=data["message"],
+        type=data["type"],
+        order_id=str(order.id),
+    )
+
+
+# ============ LIST + CREATE NOTIFICATIONS ============
+
+class NotificationListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /orders/notifications/       → list user's notifications
+    POST /orders/notifications/       → create a new notification
+    """
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # show only this user's notifications, newest first
-        return Notification.objects.filter(user=self.request.user).order_by("-created_at")
+        return Notification.objects.filter(user=self.request.user)
 
-# orders/views.py
-from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+# ============ MARK SINGLE NOTIFICATION AS READ ============
 
 @api_view(["PATCH"])
 @permission_classes([permissions.IsAuthenticated])
@@ -997,6 +1037,39 @@ def mark_notification_read(request, pk):
         notif = Notification.objects.get(pk=pk, user=request.user)
         notif.is_read = True
         notif.save()
-        return Response({"detail": "Marked as read"})
+        return Response(NotificationSerializer(notif).data)
     except Notification.DoesNotExist:
-        return Response({"detail": "Not found"}, status=404)
+        return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+# ============ ✅ NEW: MARK ALL NOTIFICATIONS AS READ ============
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def mark_all_notifications_read(request):
+    updated = Notification.objects.filter(
+        user=request.user, is_read=False
+    ).update(is_read=True)
+    return Response({"detail": f"Marked {updated} notifications as read"})
+
+
+# ============ ✅ NEW: DELETE SINGLE NOTIFICATION ============
+
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def delete_notification(request, pk):
+    try:
+        notif = Notification.objects.get(pk=pk, user=request.user)
+        notif.delete()
+        return Response({"detail": "Deleted"}, status=status.HTTP_204_NO_CONTENT)
+    except Notification.DoesNotExist:
+        return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+# ============ ✅ NEW: DELETE ALL NOTIFICATIONS ============
+
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def delete_all_notifications(request):
+    count, _ = Notification.objects.filter(user=request.user).delete()
+    return Response({"detail": f"Deleted {count} notifications"})
