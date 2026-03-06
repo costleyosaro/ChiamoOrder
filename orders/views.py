@@ -1011,6 +1011,7 @@ def create_order_notification(user, order, event="placed"):
     )
 
 
+
 # ============ LIST + CREATE NOTIFICATIONS ============
 
 class NotificationListCreateView(generics.ListCreateAPIView):
@@ -1073,3 +1074,191 @@ def delete_notification(request, pk):
 def delete_all_notifications(request):
     count, _ = Notification.objects.filter(user=request.user).delete()
     return Response({"detail": f"Deleted {count} notifications"})
+
+
+# orders/views.py — add this
+
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def send_invoice_email(request, pk):
+    """Send invoice to customer's email."""
+    try:
+        order = Order.objects.get(pk=pk, user=request.user)
+    except Order.DoesNotExist:
+        return Response(
+            {"detail": "Order not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    email = request.data.get("email") or request.user.email
+    if not email:
+        return Response(
+            {"detail": "No email address provided"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Build invoice data
+    items = order.items.all()
+    subtotal = sum(
+        (item.price or 0) * (item.quantity or 1) for item in items
+    )
+    delivery_fee = getattr(order, "delivery_fee", 0) or 0
+    grand_total = order.total or (subtotal + delivery_fee)
+
+    # Get customer name
+    user = request.user
+    customer_name = (
+        getattr(user, "business_name", "")
+        or getattr(user, "company_name", "")
+        or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+        or getattr(user, "username", "Customer")
+    )
+
+    # Build HTML email
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 30px 20px; }}
+            .header {{ text-align: center; margin-bottom: 30px; }}
+            .header h1 {{ font-size: 24px; color: #111827; margin: 10px 0 4px; }}
+            .header p {{ font-size: 12px; color: #9ca3af; }}
+            .divider {{ height: 1px; background: #e5e7eb; margin: 20px 0; }}
+            .info-grid {{ display: flex; justify-content: space-between; margin-bottom: 20px; }}
+            .info-left, .info-right {{ }}
+            .info-right {{ text-align: right; }}
+            .info-label {{ font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; }}
+            .info-value {{ font-size: 14px; color: #374151; font-weight: 500; }}
+            .customer-name {{ font-size: 18px; font-weight: 700; color: #111; }}
+            .order-id {{ font-size: 16px; font-weight: 800; color: #111; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+            th {{ font-size: 11px; text-transform: uppercase; color: #6b7280; padding: 10px 8px; text-align: left; border-bottom: 2px solid #111; letter-spacing: 0.5px; }}
+            td {{ padding: 10px 8px; font-size: 14px; color: #374151; border-bottom: 1px solid #f3f4f6; }}
+            .text-right {{ text-align: right; }}
+            .text-center {{ text-align: center; }}
+            .bold {{ font-weight: 700; color: #111; }}
+            .totals {{ margin-left: auto; width: 250px; }}
+            .total-row {{ display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }}
+            .grand-total {{ font-size: 18px; font-weight: 800; color: #111; border-top: 2px solid #111; padding-top: 10px; margin-top: 6px; }}
+            .stamp {{ text-align: center; margin: 30px 0; }}
+            .stamp span {{ border: 3px solid #10b981; color: #10b981; padding: 6px 28px; font-size: 20px; font-weight: 800; letter-spacing: 5px; border-radius: 6px; }}
+            .footer {{ text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }}
+            .footer p {{ font-size: 12px; color: #9ca3af; margin: 2px 0; }}
+            .thanks {{ font-size: 16px; font-weight: 700; color: #111; margin-bottom: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>ChiamoOrder</h1>
+                <p>Shop Smarter, Order Faster</p>
+            </div>
+            <div class="divider"></div>
+            <h2 style="text-align:center;font-size:24px;letter-spacing:5px;color:#111;">INVOICE</h2>
+            <table style="width:100%;border:none;margin:16px 0;">
+                <tr>
+                    <td style="border:none;padding:4px 0;">
+                        <span class="info-label">Bill To:</span><br>
+                        <span class="customer-name">{customer_name}</span><br>
+                        <span class="info-value">{email}</span>
+                    </td>
+                    <td style="border:none;padding:4px 0;text-align:right;">
+                        <span class="info-label">Invoice No:</span><br>
+                        <span class="order-id">{order.order_id or f'INV-{order.id}'}</span><br>
+                        <span class="info-label">Date:</span><br>
+                        <span class="info-value">{order.created_at.strftime('%B %d, %Y at %I:%M %p')}</span>
+                    </td>
+                </tr>
+            </table>
+            <div class="divider"></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    for idx, item in enumerate(items, 1):
+        item_name = getattr(item, "name", "") or getattr(item.product, "name", "Product") if hasattr(item, "product") else "Product"
+        item_price = float(item.price or 0)
+        item_qty = int(item.quantity or 1)
+        item_total = item_price * item_qty
+
+        html_content += f"""
+                    <tr>
+                        <td>{idx}</td>
+                        <td class="bold">{item_name}</td>
+                        <td class="text-center">{item_qty}</td>
+                        <td class="text-right">₦{item_price:,.2f}</td>
+                        <td class="text-right bold">₦{item_total:,.2f}</td>
+                    </tr>
+        """
+
+    html_content += f"""
+                </tbody>
+            </table>
+            <div class="totals">
+                <div class="total-row">
+                    <span>Subtotal</span>
+                    <span>₦{subtotal:,.2f}</span>
+                </div>
+                <div class="total-row">
+                    <span>Delivery Fee</span>
+                    <span>{"FREE" if delivery_fee == 0 else f"₦{delivery_fee:,.2f}"}</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>Grand Total</span>
+                    <span>₦{float(grand_total):,.2f}</span>
+                </div>
+            </div>
+            <div class="stamp">
+                <span>PAID</span>
+            </div>
+            <div class="footer">
+                <p class="thanks">Thank you for your order!</p>
+                <p>ChiamoOrder — Port Harcourt, Rivers State, Nigeria</p>
+                <p>Email: chiamoorder@gmail.com | Phone: +234 703 241 0362</p>
+                <p style="margin-top:10px;font-style:italic;color:#d1d5db;">
+                    This is a computer-generated invoice. No signature required.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    plain_text = strip_tags(html_content)
+
+    try:
+        send_mail(
+            subject=f"Invoice — Order {order.order_id or order.id} | ChiamoOrder",
+            message=plain_text,
+            from_email=None,  # Uses DEFAULT_FROM_EMAIL
+            recipient_list=[email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+        return Response({"detail": f"Invoice sent to {email}"})
+    except Exception as e:
+        return Response(
+            {"detail": f"Failed to send email: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

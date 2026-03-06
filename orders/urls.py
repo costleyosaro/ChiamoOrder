@@ -2,6 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import support_message, mark_notification_read
+from .views import send_invoice_email
 from .views import (
     NotificationListCreateView,
     mark_notification_read,
@@ -96,6 +97,11 @@ urlpatterns = [
         name="delete-notification",
     ),
 
+     path(
+        "user-orders/<int:pk>/send-invoice/",
+        send_invoice_email,
+        name="send-invoice-email",
+    ),
 
 ]
 print("SMARTLIST URLS LOADED")
