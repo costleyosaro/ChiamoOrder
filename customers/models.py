@@ -292,6 +292,7 @@ class Address(models.Model):
         on_delete=models.CASCADE,
         related_name="addresses"
     )
+    label = models.CharField(max_length=50, default='Home', blank=True)
     street = models.CharField(max_length=255)
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100, blank=True, null=True)
