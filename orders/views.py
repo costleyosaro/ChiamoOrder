@@ -1078,21 +1078,68 @@ def delete_all_notifications(request):
 
 
 
-from django.core.mail import send_mail
-from django.utils.html import strip_tags
+# orders/views.py
+
+import traceback
+import requests as http_requests  # rename to avoid conflict with DRF request
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status as http_status
-import traceback
+
+
+def send_email_via_brevo(to_email, to_name, subject, html_content):
+    """
+    Send email using Brevo (Sendinblue) API.
+    Same approach as your forgot-password emails.
+    """
+    api_key = getattr(settings, "BREVO_API_KEY", "") or ""
+    sender_email = getattr(settings, "SENDER_EMAIL", "chiamoorder@gmail.com")
+
+    if not api_key:
+        raise Exception("BREVO_API_KEY is not configured")
+
+    url = "https://api.brevo.com/v3/smtp/email"
+
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key,
+    }
+
+    payload = {
+        "sender": {
+            "name": "ChiamoOrder",
+            "email": sender_email,
+        },
+        "to": [
+            {
+                "email": to_email,
+                "name": to_name or to_email,
+            }
+        ],
+        "subject": subject,
+        "htmlContent": html_content,
+    }
+
+    response = http_requests.post(url, json=payload, headers=headers, timeout=30)
+
+    if response.status_code not in [200, 201, 202]:
+        error_detail = response.text
+        raise Exception(
+            f"Brevo API error ({response.status_code}): {error_detail}"
+        )
+
+    return response.json()
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def send_invoice_email(request, pk):
-    """Send invoice to customer's email."""
-    
-    # 1. Find the order
+    """Send invoice to customer email via Brevo API."""
+
+    # 1) Find order
     try:
         order = Order.objects.get(pk=pk, user=request.user)
     except Order.DoesNotExist:
@@ -1101,197 +1148,239 @@ def send_invoice_email(request, pk):
             status=http_status.HTTP_404_NOT_FOUND,
         )
 
-    # 2. Get email
-    email = request.data.get("email") or getattr(request.user, "email", "")
+    # 2) Get email
+    email = request.data.get("email", "").strip()
+    if not email:
+        email = getattr(request.user, "email", "")
     if not email:
         return Response(
             {"detail": "No email address provided"},
             status=http_status.HTTP_400_BAD_REQUEST,
         )
 
-    # 3. Build data safely
-    try:
-        # Get items — handle different relationship names
-        items = []
-        if hasattr(order, "items"):
+    # 3) Safely get items
+    items = []
+    for attr in ["items", "order_items", "orderitem_set"]:
+        manager = getattr(order, attr, None)
+        if manager is not None and hasattr(manager, "all"):
             try:
-                items = list(order.items.all())
+                items = list(manager.all())
+                break
             except Exception:
-                items = []
-        elif hasattr(order, "order_items"):
-            try:
-                items = list(order.order_items.all())
-            except Exception:
-                items = []
-        elif hasattr(order, "orderitem_set"):
-            try:
-                items = list(order.orderitem_set.all())
-            except Exception:
-                items = []
+                continue
 
-        # Calculate subtotal
-        subtotal = 0
-        for item in items:
-            price = float(getattr(item, "price", 0) or 0)
-            qty = int(getattr(item, "quantity", 1) or 1)
-            subtotal += price * qty
+    # 4) Calculate totals
+    subtotal = 0
+    items_data = []
+    for idx, item in enumerate(items, 1):
+        name = "Product"
+        for name_attr in ["name", "product_name"]:
+            val = getattr(item, name_attr, None)
+            if val:
+                name = str(val)
+                break
+        if name == "Product" and hasattr(item, "product"):
+            product = getattr(item, "product", None)
+            if product:
+                name = getattr(product, "name", "Product")
 
-        delivery_fee = float(getattr(order, "delivery_fee", 0) or 0)
-        grand_total = float(getattr(order, "total", 0) or 0) or (subtotal + delivery_fee)
+        price = float(getattr(item, "price", 0) or 0)
+        qty = int(getattr(item, "quantity", 1) or 1)
+        total = price * qty
+        subtotal += total
+        items_data.append({
+            "idx": idx,
+            "name": name,
+            "price": price,
+            "qty": qty,
+            "total": total,
+        })
 
-        # Customer name
-        user = request.user
+    delivery_fee = float(getattr(order, "delivery_fee", 0) or 0)
+    grand_total = float(getattr(order, "total", 0) or 0)
+    if grand_total == 0:
+        grand_total = subtotal + delivery_fee
+
+    # 5) Customer info
+    user = request.user
+    customer_name = ""
+    for attr in ["business_name", "company_name", "shop_name"]:
+        val = getattr(user, attr, "")
+        if val:
+            customer_name = str(val)
+            break
+    if not customer_name:
+        first = getattr(user, "first_name", "")
+        last = getattr(user, "last_name", "")
         customer_name = (
-            getattr(user, "business_name", "")
-            or getattr(user, "company_name", "")
-            or getattr(user, "shop_name", "")
-            or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+            f"{first} {last}".strip()
             or getattr(user, "username", "Customer")
         )
 
-        # Order ID
-        order_id = getattr(order, "order_id", "") or f"INV-{order.id}"
+    order_id = getattr(order, "order_id", "") or f"INV-{order.id}"
+    created = getattr(order, "created_at", None)
+    date_str = (
+        created.strftime("%B %d, %Y at %I:%M %p") if created else "N/A"
+    )
 
-        # Date
-        created_at = getattr(order, "created_at", None)
-        if created_at:
-            date_str = created_at.strftime("%B %d, %Y at %I:%M %p")
-        else:
-            date_str = "N/A"
-
-    except Exception as e:
-        return Response(
-            {"detail": f"Error preparing invoice data: {str(e)}"},
-            status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+    # 6) Build items HTML
+    rows_html = ""
+    for item in items_data:
+        rows_html += (
+            f'<tr>'
+            f'<td style="padding:10px 8px;font-size:14px;color:#374151;'
+            f'border-bottom:1px solid #f3f4f6;">{item["idx"]}</td>'
+            f'<td style="padding:10px 8px;font-size:14px;color:#111827;'
+            f'font-weight:600;border-bottom:1px solid #f3f4f6;">'
+            f'{item["name"]}</td>'
+            f'<td style="padding:10px 8px;font-size:14px;color:#374151;'
+            f'text-align:center;border-bottom:1px solid #f3f4f6;">'
+            f'{item["qty"]}</td>'
+            f'<td style="padding:10px 8px;font-size:14px;color:#374151;'
+            f'text-align:right;border-bottom:1px solid #f3f4f6;">'
+            f'&#8358;{item["price"]:,.2f}</td>'
+            f'<td style="padding:10px 8px;font-size:14px;color:#111827;'
+            f'font-weight:600;text-align:right;border-bottom:1px solid '
+            f'#f3f4f6;">&#8358;{item["total"]:,.2f}</td>'
+            f'</tr>'
         )
 
-    # 4. Build HTML
-    items_html = ""
-    for idx, item in enumerate(items, 1):
-        # Get item name safely
-        item_name = "Product"
-        if hasattr(item, "name") and item.name:
-            item_name = item.name
-        elif hasattr(item, "product") and item.product:
-            item_name = getattr(item.product, "name", "Product")
-        elif hasattr(item, "product_name") and item.product_name:
-            item_name = item.product_name
+    fee_display = (
+        "FREE" if delivery_fee == 0
+        else f"&#8358;{delivery_fee:,.2f}"
+    )
 
-        item_price = float(getattr(item, "price", 0) or 0)
-        item_qty = int(getattr(item, "quantity", 1) or 1)
-        item_total = item_price * item_qty
+    # 7) Full HTML email
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;color:#333;margin:0;padding:0;background:#f0f2f5;">
 
-        items_html += f"""
-        <tr>
-            <td style="padding:10px 8px;font-size:14px;color:#374151;border-bottom:1px solid #f3f4f6;">{idx}</td>
-            <td style="padding:10px 8px;font-size:14px;color:#111827;font-weight:600;border-bottom:1px solid #f3f4f6;">{item_name}</td>
-            <td style="padding:10px 8px;font-size:14px;color:#374151;text-align:center;border-bottom:1px solid #f3f4f6;">{item_qty}</td>
-            <td style="padding:10px 8px;font-size:14px;color:#374151;text-align:right;border-bottom:1px solid #f3f4f6;">&#8358;{item_price:,.2f}</td>
-            <td style="padding:10px 8px;font-size:14px;color:#111827;font-weight:600;text-align:right;border-bottom:1px solid #f3f4f6;">&#8358;{item_total:,.2f}</td>
-        </tr>
-        """
+<div style="max-width:600px;margin:0 auto;padding:30px 20px;background:#ffffff;">
 
-    delivery_fee_str = "FREE" if delivery_fee == 0 else f"&#8358;{delivery_fee:,.2f}"
+<!-- Header -->
+<div style="text-align:center;margin-bottom:24px;">
+  <h1 style="font-size:22px;color:#111827;margin:8px 0 4px;font-family:Arial,sans-serif;">
+    ChiamoOrder
+  </h1>
+  <p style="font-size:11px;color:#9ca3af;margin:0;letter-spacing:0.5px;">
+    Shop Smarter, Order Faster
+  </p>
+</div>
 
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="font-family:Arial,sans-serif;color:#333;margin:0;padding:0;background:#f0f2f5;">
-        <div style="max-width:600px;margin:0 auto;padding:30px 20px;background:#ffffff;">
-            <div style="text-align:center;margin-bottom:30px;">
-                <h1 style="font-size:24px;color:#111827;margin:10px 0 4px;">ChiamoOrder</h1>
-                <p style="font-size:12px;color:#9ca3af;margin:0;">Shop Smarter, Order Faster</p>
-            </div>
-            
-            <div style="height:1px;background:#e5e7eb;margin:20px 0;"></div>
-            
-            <h2 style="text-align:center;font-size:24px;letter-spacing:5px;color:#111;margin:16px 0;">INVOICE</h2>
-            
-            <table style="width:100%;border:none;margin:16px 0;">
-                <tr>
-                    <td style="border:none;padding:4px 0;vertical-align:top;">
-                        <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Bill To:</span><br>
-                        <span style="font-size:18px;font-weight:700;color:#111;">{customer_name}</span><br>
-                        <span style="font-size:14px;color:#374151;">{email}</span>
-                    </td>
-                    <td style="border:none;padding:4px 0;text-align:right;vertical-align:top;">
-                        <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Invoice No:</span><br>
-                        <span style="font-size:16px;font-weight:800;color:#111;">{order_id}</span><br>
-                        <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Date:</span><br>
-                        <span style="font-size:14px;color:#374151;">{date_str}</span>
-                    </td>
-                </tr>
-            </table>
-            
-            <div style="height:1px;background:#e5e7eb;margin:20px 0;"></div>
-            
-            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-                <thead>
-                    <tr>
-                        <th style="font-size:11px;text-transform:uppercase;color:#6b7280;padding:10px 8px;text-align:left;border-bottom:2px solid #111;letter-spacing:0.5px;">#</th>
-                        <th style="font-size:11px;text-transform:uppercase;color:#6b7280;padding:10px 8px;text-align:left;border-bottom:2px solid #111;letter-spacing:0.5px;">Product</th>
-                        <th style="font-size:11px;text-transform:uppercase;color:#6b7280;padding:10px 8px;text-align:center;border-bottom:2px solid #111;letter-spacing:0.5px;">Qty</th>
-                        <th style="font-size:11px;text-transform:uppercase;color:#6b7280;padding:10px 8px;text-align:right;border-bottom:2px solid #111;letter-spacing:0.5px;">Unit Price</th>
-                        <th style="font-size:11px;text-transform:uppercase;color:#6b7280;padding:10px 8px;text-align:right;border-bottom:2px solid #111;letter-spacing:0.5px;">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {items_html}
-                </tbody>
-            </table>
-            
-            <div style="margin-left:auto;width:250px;">
-                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
-                    <span>Subtotal</span>
-                    <span>&#8358;{subtotal:,.2f}</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
-                    <span>Delivery Fee</span>
-                    <span>{delivery_fee_str}</span>
-                </div>
-                <div style="height:2px;background:#111;margin:6px 0;"></div>
-                <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:18px;font-weight:800;color:#111;">
-                    <span>Grand Total</span>
-                    <span>&#8358;{grand_total:,.2f}</span>
-                </div>
-            </div>
-            
-            <div style="text-align:center;margin:30px 0;">
-                <span style="border:3px solid #1b4b8c;color:#1b4b8c;padding:6px 28px;font-size:20px;font-weight:800;letter-spacing:5px;border-radius:6px;">RAISED</span>
-            </div>
-            
-            <div style="text-align:center;margin-top:30px;padding-top:20px;border-top:1px solid #e5e7eb;">
-                <p style="font-size:16px;font-weight:700;color:#111;margin-bottom:10px;">Thank you for your order!</p>
-                <p style="font-size:12px;color:#9ca3af;margin:2px 0;">ChiamoOrder — Port Harcourt, Rivers State, Nigeria</p>
-                <p style="font-size:12px;color:#9ca3af;margin:2px 0;">Email: chiamoorder@gmail.com | Phone: +234 703 241 0362</p>
-                <p style="margin-top:10px;font-style:italic;color:#d1d5db;font-size:11px;">
-                    This is a computer-generated invoice. No signature required.
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+<div style="height:1px;background:#e5e7eb;margin:16px 0;"></div>
 
-    # 5. Send email
+<!-- Invoice Title -->
+<h2 style="text-align:center;font-size:22px;letter-spacing:5px;color:#111;margin:14px 0;font-family:Arial,sans-serif;">
+  INVOICE
+</h2>
+
+<!-- Customer & Order Info -->
+<table style="width:100%;margin:14px 0;" cellpadding="0" cellspacing="0" border="0">
+<tr>
+  <td style="vertical-align:top;padding:4px 0;width:50%;">
+    <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Bill To:</div>
+    <div style="font-size:16px;font-weight:700;color:#111;margin-top:2px;">{customer_name}</div>
+    <div style="font-size:13px;color:#374151;margin-top:2px;">{email}</div>
+  </td>
+  <td style="vertical-align:top;padding:4px 0;text-align:right;width:50%;">
+    <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Invoice No:</div>
+    <div style="font-size:15px;font-weight:800;color:#111;margin-top:2px;">{order_id}</div>
+    <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Date:</div>
+    <div style="font-size:13px;color:#374151;margin-top:2px;">{date_str}</div>
+  </td>
+</tr>
+</table>
+
+<div style="height:1px;background:#e5e7eb;margin:16px 0;"></div>
+
+<!-- Items Table -->
+<table style="width:100%;border-collapse:collapse;margin:16px 0;" cellpadding="0" cellspacing="0">
+<thead>
+<tr>
+  <th style="font-size:10px;text-transform:uppercase;color:#6b7280;padding:8px 6px;text-align:left;border-bottom:2px solid #111;letter-spacing:0.5px;">#</th>
+  <th style="font-size:10px;text-transform:uppercase;color:#6b7280;padding:8px 6px;text-align:left;border-bottom:2px solid #111;letter-spacing:0.5px;">Product</th>
+  <th style="font-size:10px;text-transform:uppercase;color:#6b7280;padding:8px 6px;text-align:center;border-bottom:2px solid #111;letter-spacing:0.5px;">Qty</th>
+  <th style="font-size:10px;text-transform:uppercase;color:#6b7280;padding:8px 6px;text-align:right;border-bottom:2px solid #111;letter-spacing:0.5px;">Price</th>
+  <th style="font-size:10px;text-transform:uppercase;color:#6b7280;padding:8px 6px;text-align:right;border-bottom:2px solid #111;letter-spacing:0.5px;">Total</th>
+</tr>
+</thead>
+<tbody>
+{rows_html}
+</tbody>
+</table>
+
+<!-- Totals -->
+<table style="margin-left:auto;width:240px;" cellpadding="0" cellspacing="0" border="0">
+<tr>
+  <td style="padding:5px 0;font-size:13px;color:#374151;">Subtotal</td>
+  <td style="padding:5px 0;font-size:13px;color:#374151;text-align:right;">&#8358;{subtotal:,.2f}</td>
+</tr>
+<tr>
+  <td style="padding:5px 0;font-size:13px;color:#374151;">Delivery</td>
+  <td style="padding:5px 0;font-size:13px;color:#374151;text-align:right;">{fee_display}</td>
+</tr>
+<tr>
+  <td colspan="2" style="padding:0;"><div style="height:2px;background:#111;margin:4px 0;"></div></td>
+</tr>
+<tr>
+  <td style="padding:8px 0;font-size:16px;font-weight:800;color:#111;">Grand Total</td>
+  <td style="padding:8px 0;font-size:16px;font-weight:800;color:#111;text-align:right;">&#8358;{grand_total:,.2f}</td>
+</tr>
+</table>
+
+<!-- RAISED Stamp -->
+<div style="text-align:center;margin:24px 0;">
+  <span style="border:3px solid #1b4b8c;color:#1b4b8c;padding:5px 24px;font-size:18px;font-weight:800;letter-spacing:4px;border-radius:6px;display:inline-block;">
+    RAISED
+  </span>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;">
+  <p style="font-size:14px;font-weight:700;color:#111;margin:0 0 8px;">
+    Thank you for your order!
+  </p>
+  <p style="font-size:11px;color:#9ca3af;margin:2px 0;">
+    ChiamoOrder &mdash; Port Harcourt, Rivers State, Nigeria
+  </p>
+  <p style="font-size:11px;color:#9ca3af;margin:2px 0;">
+    Email: chiamoorder@gmail.com | Phone: +234 703 241 0362
+  </p>
+  <p style="margin-top:8px;font-style:italic;color:#d1d5db;font-size:10px;">
+    Computer-generated invoice. No signature required.
+  </p>
+</div>
+
+</div>
+</body>
+</html>"""
+
+    # 8) Send via Brevo
     try:
-        plain_text = strip_tags(html_content)
-        
-        send_mail(
+        result = send_email_via_brevo(
+            to_email=email,
+            to_name=customer_name,
             subject=f"Invoice — Order {order_id} | ChiamoOrder",
-            message=plain_text,
-            from_email=None,
-            recipient_list=[email],
-            html_message=html_content,
-            fail_silently=False,
+            html_content=html,
         )
-        
+        print(f"[INVOICE EMAIL] Sent to {email} via Brevo: {result}")
         return Response({"detail": f"Invoice sent to {email}"})
-        
+
     except Exception as e:
-        print(f"Email send error: {traceback.format_exc()}")
+        error_msg = str(e)
+        print(f"[INVOICE EMAIL ERROR] {traceback.format_exc()}")
+
+        if "BREVO_API_KEY" in error_msg:
+            detail = "Email service not configured. Contact support."
+        elif "401" in error_msg or "403" in error_msg:
+            detail = "Email authentication failed. Contact support."
+        elif "timeout" in error_msg.lower():
+            detail = "Email service timeout. Please try again."
+        else:
+            detail = f"Failed to send: {error_msg}"
+
         return Response(
-            {"detail": f"Failed to send email. Please check email configuration. Error: {str(e)}"},
+            {"detail": detail},
             status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
