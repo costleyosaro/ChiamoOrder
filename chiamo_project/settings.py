@@ -109,7 +109,7 @@ else:
 
 # ============ AUTHENTICATION BACKENDS ============
 AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesStandaloneBackend',
+    'customers.backends.BusinessNameBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -311,6 +311,7 @@ LOGGING = {
         },
     },
 }
+
 
 import os
 
