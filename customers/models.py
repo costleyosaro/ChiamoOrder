@@ -115,7 +115,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.pk:
             try:
                 qr = qrcode.QRCode(version=1, box_size=10, border=5)
-                qr.add_data(f"https://yourfrontend.com/user/{self.pk}")
+                qr.add_data(f"https://chiamo-frontend.vercel.app/user/{self.pk}")
                 qr.make(fit=True)
 
                 img = qr.make_image(fill="black", back_color="white")

@@ -46,3 +46,11 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+
+*.env
+# Credentials
+*credentials*
+*secrets*
+# Staff credentials
+staff_credentials.txt
