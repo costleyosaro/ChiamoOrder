@@ -28,7 +28,6 @@ class CartAdmin(admin.ModelAdmin):
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ['product', 'quantity', 'price']
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
@@ -48,36 +47,21 @@ class OrderAdmin(admin.ModelAdmin):
     
     Roles:
     - InvoicerAdmin: Can only change status from 'confirmed' to 'processing'
-    - LogisticsAdmin: Can change status from 'processing' onwards (shipped, out_for_delivery, delivered)
+    - LogisticsAdmin: Can change status from 'processing' onwards
     - SuperUser: Full access
     """
 
-    list_display = ("order_id", "id", "user", "status", "total", "delivery_method", "created_at")
-    list_filter = ("status", "delivery_method", "created_at")
+    list_display = ("order_id", "id", "user", "status", "total", "created_at")
+    list_filter = ("status", "created_at")
     search_fields = ("order_id", "user__business_name", "user__email")
-    list_editable = ("status",)  # Allow inline status editing
     ordering = ("-created_at",)
     inlines = [OrderItemInline]
-    
-    # Fields to show in detail view
-    fieldsets = (
-        ("Order Information", {
-            "fields": ("order_id", "user", "status", "total")
-        }),
-        ("Delivery Information", {
-            "fields": ("delivery_method", "delivery_address")
-        }),
-        ("Timestamps", {
-            "fields": ("created_at",),
-            "classes": ("collapse",)
-        }),
-    )
 
     def get_readonly_fields(self, request, obj=None):
         """Make fields readonly based on user role."""
         user = request.user
         
-        # Superusers can edit everything
+        # Superusers can edit most things
         if user.is_superuser:
             return ["order_id", "created_at"]
         
@@ -87,47 +71,11 @@ class OrderAdmin(admin.ModelAdmin):
         # Base readonly fields for all staff
         readonly = ["order_id", "user", "total", "created_at"]
         
-        # InvoicerAdmin - can only change status, everything else readonly
-        if 'InvoicerAdmin' in user_groups:
-            readonly.extend(["delivery_method", "delivery_address"])
-            
-        # LogisticsAdmin - can change status and view delivery info
-        elif 'LogisticsAdmin' in user_groups:
-            readonly.extend(["delivery_method"])  # Can view but not change delivery method
-        
-        # SupportAdmin - can change status
-        elif 'SupportAdmin' in user_groups:
-            readonly.extend(["delivery_method", "delivery_address"])
-        
         # FinanceAdmin - readonly everything
-        elif 'FinanceAdmin' in user_groups:
-            readonly.extend(["status", "delivery_method", "delivery_address"])
-        
-        # Default - readonly
-        else:
-            readonly.extend(["status", "delivery_method", "delivery_address"])
+        if 'FinanceAdmin' in user_groups:
+            readonly.append("status")
         
         return readonly
-
-    def get_list_editable(self, request):
-        """Control inline editing based on role."""
-        user = request.user
-        
-        if user.is_superuser:
-            return ["status"]
-        
-        user_groups = [g.name for g in user.groups.all()]
-        
-        # Allow inline status editing for these roles
-        if any(role in user_groups for role in ['InvoicerAdmin', 'LogisticsAdmin', 'SupportAdmin']):
-            return ["status"]
-        
-        return []
-
-    def get_changelist_instance(self, request):
-        """Override to dynamically set list_editable."""
-        self.list_editable = self.get_list_editable(request)
-        return super().get_changelist_instance(request)
 
     # --- Permission Control ---
     def has_module_permission(self, request):
@@ -175,11 +123,9 @@ class OrderAdmin(admin.ModelAdmin):
         - SuperUser: Can change anything
         """
         if not change:
-            # New order - just save
             super().save_model(request, obj, form, change)
             return
         
-        # Check if status was changed
         if 'status' not in form.changed_data:
             super().save_model(request, obj, form, change)
             return
@@ -196,11 +142,11 @@ class OrderAdmin(admin.ModelAdmin):
         # Get old and new status
         try:
             old_order = Order.objects.get(pk=obj.pk)
-            old_status = old_order.status.lower().strip() if old_order.status else 'confirmed'
+            old_status = (old_order.status or 'confirmed').lower().strip()
         except Order.DoesNotExist:
             old_status = 'confirmed'
         
-        new_status = obj.status.lower().strip() if obj.status else 'confirmed'
+        new_status = (obj.status or 'confirmed').lower().strip()
         
         # Normalize status values
         status_map = {
@@ -216,26 +162,21 @@ class OrderAdmin(admin.ModelAdmin):
         
         # ===== INVOICER ADMIN RULES =====
         if 'InvoicerAdmin' in user_groups:
-            # Can ONLY change from 'confirmed' to 'processing'
             if old_status == 'confirmed' and new_status == 'processing':
-                # This is allowed
                 super().save_model(request, obj, form, change)
                 messages.success(request, f"✅ Order status changed to 'Processing'")
                 return
             else:
-                # Not allowed
                 messages.error(
                     request, 
                     f"❌ Invoicers can ONLY change status from 'Confirmed' to 'Processing'. "
                     f"Current status is '{old_status}'."
                 )
-                # Revert the status
                 obj.status = old_order.status
                 return
         
         # ===== LOGISTICS ADMIN RULES =====
         if 'LogisticsAdmin' in user_groups:
-            # Cannot change 'confirmed' orders - must wait for invoicer
             if old_status == 'confirmed':
                 messages.error(
                     request, 
@@ -245,7 +186,6 @@ class OrderAdmin(admin.ModelAdmin):
                 obj.status = old_order.status
                 return
             
-            # Define valid transitions for logistics
             valid_transitions = {
                 'processing': ['shipped'],
                 'shipped': ['out_for_delivery'],
@@ -255,12 +195,10 @@ class OrderAdmin(admin.ModelAdmin):
             allowed_next = valid_transitions.get(old_status, [])
             
             if new_status in allowed_next:
-                # This is allowed
                 super().save_model(request, obj, form, change)
                 messages.success(request, f"✅ Order status changed to '{new_status.replace('_', ' ').title()}'")
                 return
             else:
-                # Not allowed
                 allowed_str = ", ".join([s.replace('_', ' ').title() for s in allowed_next]) or "None"
                 messages.error(
                     request, 
@@ -273,23 +211,13 @@ class OrderAdmin(admin.ModelAdmin):
         
         # ===== SUPPORT ADMIN RULES =====
         if 'SupportAdmin' in user_groups:
-            # Support can make most changes but let's log it
             super().save_model(request, obj, form, change)
             messages.success(request, f"✅ Order status changed by Support")
             return
         
-        # ===== DEFAULT - No special permissions =====
+        # ===== DEFAULT =====
         messages.error(request, "❌ You don't have permission to change order status.")
         obj.status = old_order.status
-
-    def get_queryset(self, request):
-        """All staff can see all orders."""
-        return super().get_queryset(request)
-    
-    class Media:
-        css = {
-            'all': ('admin/css/custom_order_admin.css',)
-        }
 
 
 @admin.register(OrderItem)
@@ -297,7 +225,6 @@ class OrderItemAdmin(admin.ModelAdmin):
     list_display = ("order", "product", "quantity", "price")
     list_filter = ("order__status",)
     search_fields = ("order__order_id", "product__name")
-    readonly_fields = ["order", "product", "quantity", "price"]
 
     def has_add_permission(self, request):
         return request.user.is_superuser
