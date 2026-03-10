@@ -29,6 +29,7 @@ class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
     can_delete = False
+    readonly_fields = ['product', 'quantity', 'price']
 
     def has_add_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -45,17 +46,41 @@ class OrderAdmin(admin.ModelAdmin):
     """
     Admin for viewing and managing orders with role-based permissions.
     
+    Status Flow:
+    Pending → Processing → Shipped → Out For Delivery → Delivered
+    
     Roles:
-    - InvoicerAdmin: Can only change status from 'confirmed' to 'processing'
+    - InvoicerAdmin: Can only change status from 'pending' to 'processing'
     - LogisticsAdmin: Can change status from 'processing' onwards
     - SuperUser: Full access
     """
 
-    list_display = ("order_id", "id", "user", "status", "total", "created_at")
-    list_filter = ("status", "created_at")
+    list_display = ("order_id", "id", "user", "status", "progress", "total", "created_at")
+    list_filter = ("status", "created_at", "source")
     search_fields = ("order_id", "user__business_name", "user__email")
     ordering = ("-created_at",)
     inlines = [OrderItemInline]
+    
+    # ✅ Fieldsets for better organization
+    fieldsets = (
+        ('Order Information', {
+            'fields': ('order_id', 'user', 'created_at'),
+        }),
+        ('Status Management', {
+            'fields': ('status', 'progress'),
+            'description': '''
+                📋 <strong>Status Flow:</strong> Pending → Processing → Shipped → Out For Delivery → Delivered<br>
+                <br>
+                <strong>Role Permissions:</strong><br>
+                • <em>InvoicerAdmin:</em> Pending → Processing only<br>
+                • <em>LogisticsAdmin:</em> Processing → Shipped → Out For Delivery → Delivered<br>
+                • <em>Progress updates automatically based on status</em>
+            '''
+        }),
+        ('Order Details', {
+            'fields': ('total', 'source'),
+        }),
+    )
 
     def get_readonly_fields(self, request, obj=None):
         """Make fields readonly based on user role."""
@@ -63,15 +88,15 @@ class OrderAdmin(admin.ModelAdmin):
         
         # Superusers can edit most things
         if user.is_superuser:
-            return ["order_id", "created_at"]
+            return ["order_id", "created_at", "progress"]
         
         # Get user's groups
         user_groups = [g.name for g in user.groups.all()]
         
         # Base readonly fields for all staff
-        readonly = ["order_id", "user", "total", "created_at"]
+        readonly = ["order_id", "user", "total", "created_at", "progress", "source"]
         
-        # FinanceAdmin - readonly everything
+        # FinanceAdmin - readonly everything including status
         if 'FinanceAdmin' in user_groups:
             readonly.append("status")
         
@@ -117,9 +142,9 @@ class OrderAdmin(admin.ModelAdmin):
         Validate status changes based on user role.
         
         Rules:
-        - InvoicerAdmin: Can ONLY change 'confirmed' → 'processing'
+        - InvoicerAdmin: Can ONLY change 'pending' → 'processing'
         - LogisticsAdmin: Can change 'processing' → 'shipped' → 'out_for_delivery' → 'delivered'
-        - LogisticsAdmin: CANNOT change 'confirmed' orders (must wait for invoicer)
+        - LogisticsAdmin: CANNOT change 'pending' orders (must wait for invoicer)
         - SuperUser: Can change anything
         """
         if not change:
@@ -142,50 +167,65 @@ class OrderAdmin(admin.ModelAdmin):
         # Get old and new status
         try:
             old_order = Order.objects.get(pk=obj.pk)
-            old_status = (old_order.status or 'confirmed').lower().strip()
+            old_status = (old_order.status or 'pending').lower().strip()
         except Order.DoesNotExist:
-            old_status = 'confirmed'
+            old_status = 'pending'
         
-        new_status = (obj.status or 'confirmed').lower().strip()
+        new_status = (obj.status or 'pending').lower().strip()
         
-        # Normalize status values
-        status_map = {
-            'order confirmed': 'confirmed',
-            'order_confirmed': 'confirmed',
-            'pending': 'confirmed',
+        # ✅ Normalize status values (handle variations)
+        status_normalize = {
+            'order confirmed': 'pending',
+            'order_confirmed': 'pending',
+            'confirmed': 'pending',
             'in transit': 'shipped',
             'in_transit': 'shipped',
             'out for delivery': 'out_for_delivery',
         }
-        old_status = status_map.get(old_status, old_status)
-        new_status = status_map.get(new_status, new_status)
+        old_status = status_normalize.get(old_status, old_status)
+        new_status = status_normalize.get(new_status, new_status)
+        
+        # ✅ Human-readable status names
+        status_display = {
+            'pending': 'Pending',
+            'processing': 'Processing',
+            'shipped': 'Shipped',
+            'out_for_delivery': 'Out For Delivery',
+            'delivered': 'Delivered',
+            'cancelled': 'Cancelled',
+        }
+        
+        old_display = status_display.get(old_status, old_status.replace('_', ' ').title())
+        new_display = status_display.get(new_status, new_status.replace('_', ' ').title())
         
         # ===== INVOICER ADMIN RULES =====
         if 'InvoicerAdmin' in user_groups:
-            if old_status == 'confirmed' and new_status == 'processing':
+            if old_status == 'pending' and new_status == 'processing':
                 super().save_model(request, obj, form, change)
-                messages.success(request, f"✅ Order status changed to 'Processing'")
+                messages.success(request, f"✅ Order {obj.order_id} status changed to 'Processing'")
                 return
             else:
                 messages.error(
                     request, 
-                    f"❌ Invoicers can ONLY change status from 'Confirmed' to 'Processing'. "
-                    f"Current status is '{old_status}'."
+                    f"❌ Invoicers can ONLY change status from 'Pending' to 'Processing'. "
+                    f"Current status is '{old_display}'."
                 )
                 obj.status = old_order.status
                 return
         
         # ===== LOGISTICS ADMIN RULES =====
         if 'LogisticsAdmin' in user_groups:
-            if old_status == 'confirmed':
+            # Cannot touch pending orders
+            if old_status == 'pending':
                 messages.error(
                     request, 
-                    f"❌ Cannot change 'Confirmed' orders. "
+                    f"❌ Cannot change 'Pending' orders. "
                     f"Wait for Invoicer to change it to 'Processing' first."
                 )
                 obj.status = old_order.status
                 return
             
+            # ✅ Valid status transitions for logistics
             valid_transitions = {
                 'processing': ['shipped'],
                 'shipped': ['out_for_delivery'],
@@ -196,14 +236,14 @@ class OrderAdmin(admin.ModelAdmin):
             
             if new_status in allowed_next:
                 super().save_model(request, obj, form, change)
-                messages.success(request, f"✅ Order status changed to '{new_status.replace('_', ' ').title()}'")
+                messages.success(request, f"✅ Order {obj.order_id} status changed to '{new_display}'")
                 return
             else:
-                allowed_str = ", ".join([s.replace('_', ' ').title() for s in allowed_next]) or "None"
+                allowed_display = [status_display.get(s, s.replace('_', ' ').title()) for s in allowed_next]
+                allowed_str = ", ".join(allowed_display) or "None (already at final status)"
                 messages.error(
                     request, 
-                    f"❌ Cannot change from '{old_status.replace('_', ' ').title()}' to "
-                    f"'{new_status.replace('_', ' ').title()}'. "
+                    f"❌ Cannot change from '{old_display}' to '{new_display}'. "
                     f"Allowed next status: {allowed_str}"
                 )
                 obj.status = old_order.status
@@ -211,11 +251,12 @@ class OrderAdmin(admin.ModelAdmin):
         
         # ===== SUPPORT ADMIN RULES =====
         if 'SupportAdmin' in user_groups:
+            # Support can change status but with logging
             super().save_model(request, obj, form, change)
-            messages.success(request, f"✅ Order status changed by Support")
+            messages.success(request, f"✅ Order {obj.order_id} status changed to '{new_display}' by Support")
             return
         
-        # ===== DEFAULT =====
+        # ===== DEFAULT - No Permission =====
         messages.error(request, "❌ You don't have permission to change order status.")
         obj.status = old_order.status
 
