@@ -24,10 +24,11 @@ class ProductSerializer(serializers.ModelSerializer):
             "slug",
             "name",
             "price",
+            "flash_sale_price",
             "category",
             "category_id",
             "image",
-            "image_url",   # ✅ add image_url here
+            "image_url",
             "stock",
             "rating",
             "num_reviews",

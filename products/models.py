@@ -14,6 +14,12 @@ class Product(models.Model):
     slug = models.SlugField(null=True, unique=True, blank=True)  # ✅ add this
     price = models.DecimalField(max_digits=10, decimal_places=2)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    flash_sale_price = models.DecimalField(         # ✅ ADD THIS LINE
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
     image = models.ImageField(upload_to="products/")
     stock = models.IntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)
